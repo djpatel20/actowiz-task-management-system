@@ -1,0 +1,31 @@
+{
+  "name": "actowiz-task-management-system",
+  "version": "1.0.0",
+  "description": "Actowiz Task Management System — Role-based CRM with Kanban, OCC, and Real-time WebSocket",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build:server": "npm --prefix server run build",
+    "build:client": "npm --prefix client run build",
+    "build": "npm run build:server && npm run build:client",
+    "seed": "npm --prefix server run seed",
+    "test": "npm --prefix server test",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:seed": "docker compose exec server node dist/scripts/seed.js",
+    "docker:logs": "docker compose logs -f"
+  },
+  "keywords": [
+    "task-manager",
+    "rbac",
+    "kanban",
+    "dnd-kit",
+    "socket.io",
+    "mongodb",
+    "express",
+    "react"
+  ],
+  "author": "Actowiz Engineering"
+}
