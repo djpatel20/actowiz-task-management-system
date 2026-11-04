@@ -7,6 +7,7 @@ export interface IUser {
   passwordHash: string;
   role: UserRole;
   teamId?: Types.ObjectId;
+  teamIds?: Types.ObjectId[];
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -47,6 +48,10 @@ const userSchema = new Schema<IUserDocument>(
       ref: 'Team',
       default: null,
     },
+    teamIds: [{
+      type: Schema.Types.ObjectId,
+      ref: 'Team',
+    }],
     isActive: {
       type: Boolean,
       default: true,
@@ -66,6 +71,7 @@ const userSchema = new Schema<IUserDocument>(
 );
 
 userSchema.index({ role: 1, teamId: 1 });
+userSchema.index({ role: 1, teamIds: 1 });
 userSchema.index({ isActive: 1 });
 
 export const User = model<IUserDocument>('User', userSchema);

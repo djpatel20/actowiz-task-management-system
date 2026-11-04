@@ -17,3 +17,7 @@ export const teamQuerySchema = z.object({
   limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 20)),
   search: z.string().trim().optional(),
 });
+
+export const addTeamMemberSchema = z.object({
+  userId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid User ID'),
+});

@@ -77,13 +77,7 @@ export class UserService {
       if (!team) {
         throw new BadRequestError('Specified team does not exist');
       }
-      teamObjectId = team._id;
-
-      if (data.role === USER_ROLES.MANAGER) {
-        if (team.managerId) {
-          throw new BadRequestError('Specified team already has an assigned Manager');
-        }
-      }
+      teamObjectId = team._id as Types.ObjectId;
     }
 
     const passwordHash = await bcrypt.hash(data.password, 12);
@@ -97,9 +91,13 @@ export class UserService {
       isActive: true,
     });
 
-    // If user is a manager, link team.managerId
+    // If user is a manager and team has no managerId set, link it
     if (data.role === USER_ROLES.MANAGER && teamObjectId) {
-      await Team.findByIdAndUpdate(teamObjectId, { managerId: user._id });
+      const team = await Team.findById(teamObjectId);
+      if (team && !team.managerId) {
+        team.managerId = user._id as Types.ObjectId;
+        await team.save();
+      }
     }
 
     return user;
@@ -136,7 +134,18 @@ export class UserService {
 
     if (data.role && data.role !== user.role) {
       if (user.role === USER_ROLES.MANAGER && data.role !== USER_ROLES.MANAGER) {
-        await Team.updateMany({ managerId: user._id }, { $unset: { managerId: 1 } });
+        // Find teams where this user was managerId and reassign or unset
+        const teamsManaged = await Team.find({ managerId: user._id });
+        for (const tm of teamsManaged) {
+          const otherMgr = await User.findOne({
+            teamId: tm._id,
+            role: USER_ROLES.MANAGER,
+            isActive: true,
+            _id: { $ne: user._id },
+          });
+          tm.managerId = otherMgr ? (otherMgr._id as Types.ObjectId) : undefined;
+          await tm.save();
+        }
       }
       user.role = data.role;
       if (data.role === USER_ROLES.ADMIN) {
@@ -147,7 +156,17 @@ export class UserService {
     if (data.teamId !== undefined) {
       if (data.teamId === null || data.role === USER_ROLES.ADMIN) {
         if (user.role === USER_ROLES.MANAGER && user.teamId) {
-          await Team.findByIdAndUpdate(user.teamId, { $unset: { managerId: 1 } });
+          const currentTeam = await Team.findById(user.teamId);
+          if (currentTeam && currentTeam.managerId?.toString() === userId) {
+            const otherMgr = await User.findOne({
+              teamId: currentTeam._id,
+              role: USER_ROLES.MANAGER,
+              isActive: true,
+              _id: { $ne: user._id },
+            });
+            currentTeam.managerId = otherMgr ? (otherMgr._id as Types.ObjectId) : undefined;
+            await currentTeam.save();
+          }
         }
         user.teamId = undefined;
       } else {
@@ -155,9 +174,10 @@ export class UserService {
         if (!team) {
           throw new BadRequestError('Specified team does not exist');
         }
-        user.teamId = team._id;
-        if (user.role === USER_ROLES.MANAGER) {
-          await Team.findByIdAndUpdate(team._id, { managerId: user._id });
+        user.teamId = team._id as Types.ObjectId;
+        if (user.role === USER_ROLES.MANAGER && !team.managerId) {
+          team.managerId = user._id as Types.ObjectId;
+          await team.save();
         }
       }
     }

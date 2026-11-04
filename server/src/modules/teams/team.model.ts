@@ -4,6 +4,8 @@ export interface ITeam {
   name: string;
   description?: string;
   managerId?: Types.ObjectId;
+  managerIds?: Types.ObjectId[];
+  memberIds?: Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,9 +32,16 @@ const teamSchema = new Schema<ITeamDocument>(
     managerId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      unique: true,
-      sparse: true,
+      required: false,
     },
+    managerIds: [{
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    }],
+    memberIds: [{
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    }],
   },
   {
     timestamps: true,
@@ -45,5 +54,8 @@ const teamSchema = new Schema<ITeamDocument>(
     },
   }
 );
+
+teamSchema.index({ managerIds: 1 });
+teamSchema.index({ memberIds: 1 });
 
 export const Team = model<ITeamDocument>('Team', teamSchema);
