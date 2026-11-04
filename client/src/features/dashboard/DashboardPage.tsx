@@ -285,7 +285,7 @@ export const DashboardPage: React.FC = () => {
                           {t.status.replace('_', ' ')}
                         </span>
                         <span className="text-[11px] text-[#94A3B8] hidden sm:inline">
-                          {t.dueDate ? format(new Date(t.dueDate), 'MMM d') : ''}
+                          {t.dueDate && !isNaN(new Date(t.dueDate).getTime()) ? format(new Date(t.dueDate), 'MMM d') : ''}
                         </span>
                       </div>
                     </div>

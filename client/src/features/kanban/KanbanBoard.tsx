@@ -250,9 +250,10 @@ export const KanbanBoard: React.FC = () => {
     setSearchParams(selectedTaskId ? { selected: selectedTaskId } : {});
   };
 
-  const openTaskDrawer = (id: string) => {
+  const openTaskDrawer = (task: Task) => {
+    queryClient.setQueryData(['task', task._id], task);
     const params = new URLSearchParams(searchParams);
-    params.set('selected', id);
+    params.set('selected', task._id);
     setSearchParams(params);
   };
 
@@ -324,7 +325,7 @@ export const KanbanBoard: React.FC = () => {
                     task={task}
                     userRole={user?.role}
                     currentUserId={user?.id}
-                    onClick={() => openTaskDrawer(task._id)}
+                    onClick={() => openTaskDrawer(task)}
                     onQuickTransition={(t: Task, targetStatus: TaskStatus) => {
                       if (t.status === 'IN_REVIEW' && targetStatus === 'IN_PROGRESS') {
                         setRejectionTarget({ task: t, targetStatus });
@@ -351,7 +352,6 @@ export const KanbanBoard: React.FC = () => {
                 task={activeTask}
                 userRole={user?.role}
                 currentUserId={user?.id}
-                onClick={() => {}}
               />
             </div>
           ) : null}
@@ -387,3 +387,5 @@ export const KanbanBoard: React.FC = () => {
     </div>
   );
 };
+
+

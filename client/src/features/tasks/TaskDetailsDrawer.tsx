@@ -19,6 +19,28 @@ import {
   Upload,
 } from 'lucide-react';
 
+const safeFormat = (date: unknown, formatStr: string, fallback = 'N/A'): string => {
+  if (!date) return fallback;
+  try {
+    const d = new Date(date as string | number | Date);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+};
+
+const safeDistanceToNow = (date: unknown, fallback = 'Recently'): string => {
+  if (!date) return fallback;
+  try {
+    const d = new Date(date as string | number | Date);
+    if (isNaN(d.getTime())) return fallback;
+    return formatDistanceToNow(d, { addSuffix: true });
+  } catch {
+    return fallback;
+  }
+};
+
 interface TaskDetailsDrawerProps {
   taskId: string | null;
   onClose: () => void;
@@ -47,12 +69,25 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
     queryKey: ['task', taskId],
     queryFn: () => tasksApi.getTaskById(taskId!),
     enabled: !!taskId,
+    initialData: () => {
+      if (!taskId) return undefined;
+      const cached = queryClient.getQueryData<Task>(['task', taskId]);
+      if (cached) return cached;
+      const tasksQueries = queryClient.getQueriesData<{ tasks?: Task[] }>({ queryKey: ['tasks'] });
+      for (const [, qData] of tasksQueries) {
+        if (qData?.tasks && Array.isArray(qData.tasks)) {
+          const found = qData.tasks.find((t) => t._id === taskId);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    },
   });
 
   const { data: comments = [] } = useQuery({
     queryKey: ['task-comments', taskId],
     queryFn: () => tasksApi.listComments(taskId!),
-    enabled: !!taskId && activeTab === 'comments',
+    enabled: !!taskId,
   });
 
   const { data: activities = [] } = useQuery({
@@ -171,6 +206,30 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
     userRole === 'ADMIN' ||
     (userRole === 'MANAGER' && isProjectManager);
 
+  if (!task && !isTaskLoading) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-hidden">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-xs animate-fade-in" onClick={onClose} />
+        <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+          <div className="w-screen max-w-xl bg-white border-l border-[#E2E8F0] shadow-2xl flex flex-col p-8 items-center justify-center space-y-4 animate-slide-up">
+            <AlertTriangle className="w-12 h-12 text-[#FF6B00]" />
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold font-heading text-[#1E1B26]">Task details unavailable</h3>
+              <p className="text-xs text-[#5B616E]">This task may not exist or you do not have permission to view it.</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-[#290660] hover:bg-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple transition-all font-heading"
+            >
+              Close Drawer
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-xs animate-fade-in" onClick={onClose} />
@@ -181,14 +240,14 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
             <div className="space-y-1.5 pr-4">
               <div className="flex items-center space-x-2">
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase text-[#4400CE] bg-[#4400CE]/10 border-[#4400CE]/20 font-heading">
-                  {task?.status?.replace('_', ' ')}
+                  {task?.status ? task.status.replace('_', ' ') : 'TODO'}
                 </span>
                 <span className="text-xs text-[#5B616E]">
-                  {project?.name} &bull; {project?.client}
+                  {project?.name || 'Project'} {project?.client ? `• ${project.client}` : ''}
                 </span>
               </div>
               <h2 className="text-lg font-bold font-heading text-[#1E1B26] leading-snug">
-                {task?.title}
+                {task?.title || 'Task Details'}
               </h2>
             </div>
             <div className="flex items-center space-x-1">
@@ -238,7 +297,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
               }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              <span>Comments</span>
+              <span>Comments ({comments.length})</span>
             </button>
             <button
               type="button"
@@ -268,7 +327,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
 
           {/* Drawer Body */}
           <div className="flex-1 overflow-y-auto p-5">
-            {isTaskLoading ? (
+            {isTaskLoading && !task ? (
               <div className="py-20 text-center text-xs text-[#94A3B8]">Loading task details...</div>
             ) : activeTab === 'overview' ? (
               <div className="space-y-6">
@@ -352,14 +411,14 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                     <div className="text-[10px] font-semibold text-[#5B616E] uppercase font-heading">Due Date</div>
                     <div className="text-xs font-semibold text-[#1E1B26] mt-1.5 flex items-center space-x-1.5 font-sans">
                       <Calendar className="w-3.5 h-3.5 text-[#94A3B8]" />
-                      <span>{task?.dueDate ? format(new Date(task.dueDate), 'PPP') : 'N/A'}</span>
+                      <span>{safeFormat(task?.dueDate, 'PPP')}</span>
                     </div>
                   </div>
 
                   <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
                     <div className="text-[10px] font-semibold text-[#5B616E] uppercase font-heading">OCC Version (__v)</div>
                     <div className="text-xs font-semibold text-[#1E1B26] mt-1.5 font-sans">
-                      v{task?.__v} (Optimistic Concurrency)
+                      v{task?.__v ?? 0} (Optimistic Concurrency)
                     </div>
                   </div>
                 </div>
@@ -368,10 +427,68 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                   <div className="p-3.5 rounded-xl bg-[#ECFDF5] border border-[#A7F3D0] text-[#059669] text-xs flex items-center space-x-2 font-medium">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>
-                      Completed permanently on {format(new Date(task.completedAt), 'PPP p')}
+                      Completed permanently on {safeFormat(task.completedAt, 'PPP p')}
                     </span>
                   </div>
                 )}
+
+                {/* Instant Comments & Discussion in Overview */}
+                <div className="pt-4 border-t border-[#E2E8F0] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#5B616E] font-heading flex items-center space-x-1.5">
+                      <MessageSquare className="w-3.5 h-3.5 text-[#4400CE]" />
+                      <span>Comments & Discussion ({comments.length})</span>
+                    </h4>
+                  </div>
+
+                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                    {comments.length === 0 ? (
+                      <div className="text-center py-4 bg-[#F8FAFC] rounded-xl border border-dashed border-[#E2E8F0] text-xs text-[#94A3B8]">
+                        No comments yet. Start the conversation below.
+                      </div>
+                    ) : (
+                      comments.map((c) => {
+                        const author = c.authorId as { name?: string; role?: string };
+                        return (
+                          <div
+                            key={c._id}
+                            className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] text-xs"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-bold text-[#1E1B26] font-heading">{author?.name || 'User'}</span>
+                              <span className="text-[10px] text-[#94A3B8] font-sans">
+                                {safeDistanceToNow(c.createdAt)}
+                              </span>
+                            </div>
+                            <p className="text-[#1E1B26] leading-relaxed whitespace-pre-wrap font-sans">
+                              {c.content}
+                            </p>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <form onSubmit={handleCommentSubmit} className="pt-1">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Write a comment..."
+                        className="flex-1 px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
+                      />
+                      <button
+                        type="submit"
+                        disabled={addCommentMutation.isPending || !newComment.trim()}
+                        className="p-2 bg-gradient-to-r from-[#4400CE] to-[#290660] text-white rounded-lg hover:from-[#3B00B5] hover:to-[#1F044A] shadow-acto-purple active:scale-[0.98] transition-all disabled:opacity-50"
+                        title="Send comment"
+                      >
+                        <Send className="w-4 h-4 text-[#FF6B00]" />
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             ) : activeTab === 'comments' ? (
               <div className="flex flex-col h-full">
@@ -391,7 +508,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="font-bold text-[#1E1B26] font-heading">{author?.name}</span>
                             <span className="text-[10px] text-[#94A3B8] font-sans">
-                              {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                              {safeDistanceToNow(c.createdAt)}
                             </span>
                           </div>
                           <p className="text-[#1E1B26] leading-relaxed whitespace-pre-wrap font-sans">
@@ -437,7 +554,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-[#1E1B26] font-heading">{actor?.name}</span>
                           <span className="text-[10px] text-[#94A3B8] font-sans">
-                            {format(new Date(a.createdAt), 'MMM d, h:mm a')}
+                            {safeFormat(a.createdAt, 'MMM d, h:mm a')}
                           </span>
                         </div>
                         <div className="text-xs text-[#5B616E]">

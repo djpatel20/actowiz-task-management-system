@@ -8,14 +8,13 @@ interface KanbanCardProps {
   task: Task;
   userRole?: UserRole;
   currentUserId?: string;
-  onClick: () => void;
+  onClick?: () => void;
   onQuickTransition?: (task: Task, targetStatus: TaskStatus) => void;
 }
 
 export const KanbanCard: React.FC<KanbanCardProps> = ({
   task,
   userRole,
-  currentUserId,
   onClick,
   onQuickTransition,
 }) => {
@@ -32,7 +31,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     : undefined;
 
   const dueDate = task.dueDate ? new Date(task.dueDate) : null;
-  const isOverdue = dueDate ? isPast(dueDate) && !isToday(dueDate) && task.status !== 'DONE' : false;
+  const isDateValid = dueDate && !isNaN(dueDate.getTime());
+  const isOverdue = isDateValid ? isPast(dueDate) && !isToday(dueDate) && task.status !== 'DONE' : false;
 
   const getPriorityBadge = (priority: TaskPriority) => {
     switch (priority) {
@@ -54,11 +54,19 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   return (
     <div
       ref={setNodeRef}
+      {...listeners}
+      {...attributes}
       style={style}
-      className={`group bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-acto-sm acto-card transition-all cursor-pointer ${
-        isDragging ? 'opacity-40 shadow-acto-lg ring-2 ring-[#4400CE]' : ''
+      className={`group bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-acto-sm acto-card transition-all cursor-pointer hover:border-[#4400CE]/40 hover:shadow-acto-md select-none ${
+        isDragging ? 'opacity-40 shadow-acto-lg ring-2 ring-[#4400CE] cursor-grabbing' : ''
       }`}
-      onClick={onClick}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isDragging && onClick) {
+          onClick();
+        }
+      }}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <span className="text-[10px] font-semibold tracking-wider uppercase text-[#5B616E] truncate max-w-[150px] font-heading">
@@ -73,11 +81,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         </span>
       </div>
 
-      <h3
-        {...listeners}
-        {...attributes}
-        className="text-xs font-semibold text-[#1E1B26] leading-snug line-clamp-2 mb-3 cursor-grab active:cursor-grabbing font-sans group-hover:text-[#290660] transition-colors"
-      >
+      <h3 className="text-xs font-semibold text-[#1E1B26] leading-snug line-clamp-2 mb-3 font-sans group-hover:text-[#290660] transition-colors pointer-events-none">
         {task.title}
       </h3>
 
@@ -89,7 +93,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
               <AlertCircle className="w-3 h-3 shrink-0" />
               <span>Overdue</span>
             </span>
-          ) : dueDate ? (
+          ) : isDateValid ? (
             <span className="flex items-center space-x-1 text-[#64748B]">
               <Calendar className="w-3 h-3 text-[#94A3B8] shrink-0" />
               <span>{format(dueDate, 'MMM d')}</span>
@@ -112,7 +116,11 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
 
           {/* Accessible Quick Transition Button */}
           {onQuickTransition && (
-            <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="relative"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
               <select
                 value={task.status}
                 aria-label={`Change status for task ${task.title}`}

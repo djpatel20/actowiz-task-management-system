@@ -128,7 +128,9 @@ export const NotificationBell: React.FC<{ onSelectTask?: (taskId: string) => voi
                         {n.message}
                       </div>
                       <div className="text-[10px] text-[#94A3B8] mt-1 font-sans">
-                        {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                        {n.createdAt && !isNaN(new Date(n.createdAt).getTime())
+                          ? formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })
+                          : 'Recently'}
                       </div>
                     </div>
                   </div>
