@@ -165,19 +165,35 @@ export class TaskService {
     if (actor.role === USER_ROLES.MANAGER) {
       const pTeamId = (task.teamId as { _id?: Types.ObjectId } | null)?._id || task.teamId;
       const pObj = task.projectId as { managerId?: Types.ObjectId | string } | null;
-      const isProjectManager =
-        (pObj?.managerId && pObj.managerId.toString() === actor._id.toString()) ||
-        (!pObj?.managerId && (
-          (actor.teamId && pTeamId.toString() === actor.teamId.toString()) ||
-          Boolean(await Team.exists({ _id: pTeamId, managerId: actor._id }))
-        ));
+      const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
+      const isActorInTeam =
+        (actor.teamId && pTeamId.toString() === actor.teamId.toString()) ||
+        (userDoc?.teamId && pTeamId.toString() === userDoc.teamId.toString()) ||
+        (userDoc?.teamIds && userDoc.teamIds.some((t: Types.ObjectId) => t.toString() === pTeamId.toString()));
 
-      if (!isProjectManager) {
+      const aId = (task.assigneeId as { _id?: Types.ObjectId } | null)?._id || task.assigneeId;
+      const isAssignee = Boolean(aId && aId.toString() === actor._id.toString());
+
+      const pManagerId = pObj?.managerId
+        ? (pObj.managerId as { _id?: Types.ObjectId })._id || pObj.managerId
+        : null;
+      const isProjectManager = Boolean(pManagerId && pManagerId.toString() === actor._id.toString());
+
+      const hasTeamAccess =
+        isActorInTeam ||
+        Boolean(
+          await Team.exists({
+            _id: pTeamId,
+            $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
+          })
+        );
+
+      if (!isProjectManager && !hasTeamAccess && !isAssignee) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
       const aId = (task.assigneeId as { _id?: Types.ObjectId } | null)?._id || task.assigneeId;
-      if (aId.toString() !== actor._id.toString()) {
+      if (!aId || aId.toString() !== actor._id.toString()) {
         throw new NotFoundError('Task not found');
       }
     }

@@ -30,21 +30,26 @@ export class CommentService {
         (userDoc?.teamId && task.teamId.toString() === userDoc.teamId.toString()) ||
         (userDoc?.teamIds && userDoc.teamIds.some((t: Types.ObjectId) => t.toString() === task.teamId.toString()));
 
-      const isProjectManager =
-        project?.managerId?.toString() === actor._id.toString() ||
-        (!project?.managerId && (
-          isActorInTeam ||
-          Boolean(await Team.exists({
+      const isAssignee = Boolean(task.assigneeId && task.assigneeId.toString() === actor._id.toString());
+      const pManagerId = project?.managerId
+        ? (project.managerId as { _id?: Types.ObjectId })._id || project.managerId
+        : null;
+      const isProjectManager = Boolean(pManagerId && pManagerId.toString() === actor._id.toString());
+
+      const hasTeamAccess =
+        isActorInTeam ||
+        Boolean(
+          await Team.exists({
             _id: task.teamId,
             $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
-          }))
-        ));
+          })
+        );
 
-      if (!isProjectManager) {
+      if (!isProjectManager && !hasTeamAccess && !isAssignee) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
-      if (task.assigneeId.toString() !== actor._id.toString()) {
+      if (!task.assigneeId || task.assigneeId.toString() !== actor._id.toString()) {
         throw new NotFoundError('Task not found');
       }
     }
@@ -75,21 +80,26 @@ export class CommentService {
         (userDoc?.teamId && task.teamId.toString() === userDoc.teamId.toString()) ||
         (userDoc?.teamIds && userDoc.teamIds.some((t: Types.ObjectId) => t.toString() === task.teamId.toString()));
 
-      const isProjectManager =
-        project?.managerId?.toString() === actor._id.toString() ||
-        (!project?.managerId && (
-          isActorInTeam ||
-          Boolean(await Team.exists({
+      const isAssignee = Boolean(task.assigneeId && task.assigneeId.toString() === actor._id.toString());
+      const pManagerId = project?.managerId
+        ? (project.managerId as { _id?: Types.ObjectId })._id || project.managerId
+        : null;
+      const isProjectManager = Boolean(pManagerId && pManagerId.toString() === actor._id.toString());
+
+      const hasTeamAccess =
+        isActorInTeam ||
+        Boolean(
+          await Team.exists({
             _id: task.teamId,
             $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
-          }))
-        ));
+          })
+        );
 
-      if (!isProjectManager) {
+      if (!isProjectManager && !hasTeamAccess && !isAssignee) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
-      if (task.assigneeId.toString() !== actor._id.toString()) {
+      if (!task.assigneeId || task.assigneeId.toString() !== actor._id.toString()) {
         throw new NotFoundError('Task not found');
       }
     }
