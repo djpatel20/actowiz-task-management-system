@@ -299,8 +299,8 @@ Complete engineering specifications are maintained in the [`docs/`](./docs/) dir
 
 ## 7. Production Deployment
 
-- **Frontend Production URL**: `https://actowiz-task-management.vercel.app` *(or custom production domain)*
-- **Backend API URL**: `https://api.actowiz-task-management.com/api`
+- **Frontend Production URL**: `https://actowiz-task-management-system.vercel.app`
+- **Backend API URL**: `https://actowiz-task-management-system.onrender.com/api`
 - **Docker Production Image**: Multi-stage Nginx + Node production build available via `docker-compose.yml`.
 
 ---
