@@ -28,6 +28,7 @@ export const projectsApi = {
     startDate: string;
     endDate: string;
     teamId: string;
+    managerId?: string;
   }): Promise<Project> => {
     const res = await apiClient.post<ApiResponse<Project>>('/projects', data);
     return res.data.data;
@@ -41,10 +42,16 @@ export const projectsApi = {
       client?: string;
       startDate?: string;
       endDate?: string;
+      teamId?: string;
       status?: ProjectStatus;
+      managerId?: string | null;
     }
   ): Promise<Project> => {
     const res = await apiClient.patch<ApiResponse<Project>>(`/projects/${projectId}`, data);
     return res.data.data;
+  },
+
+  deleteProject: async (projectId: string): Promise<void> => {
+    await apiClient.delete(`/projects/${projectId}`);
   },
 };

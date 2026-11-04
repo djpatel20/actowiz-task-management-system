@@ -25,6 +25,10 @@ export const teamsApi = {
     return res.data.data;
   },
 
+  deleteTeam: async (teamId: string): Promise<void> => {
+    await apiClient.delete(`/teams/${teamId}`);
+  },
+
   getTeamMembers: async (teamId: string): Promise<User[]> => {
     const res = await apiClient.get<ApiResponse<User[]>>(`/teams/${teamId}/members`);
     return res.data.data;
