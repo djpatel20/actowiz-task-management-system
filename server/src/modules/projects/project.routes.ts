@@ -33,4 +33,10 @@ router.patch(
   ProjectController.updateProject
 );
 
+router.delete(
+  '/:id',
+  requireRole(USER_ROLES.ADMIN),
+  ProjectController.deleteProject
+);
+
 export default router;

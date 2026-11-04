@@ -57,6 +57,18 @@ export class TeamController {
     }
   }
 
+  static async deleteTeam(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await TeamService.deleteTeam(req.params.id, req.user!);
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async getTeamMembers(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const members = await TeamService.getTeamMembers(req.params.id, req.user!);

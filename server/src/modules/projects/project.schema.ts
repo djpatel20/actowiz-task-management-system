@@ -9,6 +9,7 @@ export const createProjectSchema = z
     startDate: z.string().datetime(),
     endDate: z.string().datetime(),
     teamId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Team ID'),
+    managerId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Manager ID').optional(),
   })
   .refine(
     (data) => new Date(data.endDate) >= new Date(data.startDate),
@@ -25,7 +26,9 @@ export const updateProjectSchema = z
     client: z.string().trim().min(2).max(150).optional(),
     startDate: z.string().datetime().optional(),
     endDate: z.string().datetime().optional(),
+    teamId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Team ID').optional(),
     status: z.nativeEnum(PROJECT_STATUS).optional(),
+    managerId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Manager ID').nullable().optional(),
   })
   .refine(
     (data) => {

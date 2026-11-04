@@ -2,6 +2,8 @@ import { FilterQuery, Types } from 'mongoose';
 import { Project, IProjectDocument } from './project.model.js';
 import { Task } from '../tasks/task.model.js';
 import { Team } from '../teams/team.model.js';
+import { User } from '../users/user.model.js';
+import { Activity } from '../activity/activity.model.js';
 import { AuthUserPayload } from '../../shared/types/index.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { PROJECT_STATUS, ProjectStatus, TASK_STATUS, USER_ROLES } from '../../config/constants.js';
@@ -74,6 +76,7 @@ export class ProjectService {
     const [projects, total] = await Promise.all([
       Project.find(filter)
         .populate('teamId', 'name')
+        .populate('managerId', 'name email role')
         .populate('createdBy', 'name email')
         .sort({ [sortField]: sortDirection })
         .skip(skip)
@@ -104,6 +107,7 @@ export class ProjectService {
   static async getProjectById(projectId: string, actor: AuthUserPayload) {
     const project = await Project.findById(projectId)
       .populate('teamId', 'name description')
+      .populate('managerId', 'name email role')
       .populate('createdBy', 'name email')
       .lean();
 
@@ -113,7 +117,8 @@ export class ProjectService {
 
     // Authorization check
     if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || !project.teamId || project.teamId._id.toString() !== actor.teamId.toString()) {
+      const pTeamId = (project.teamId as { _id?: Types.ObjectId } | null)?._id || project.teamId;
+      if (!actor.teamId || !pTeamId || pTeamId.toString() !== actor.teamId.toString()) {
         throw new NotFoundError('Project not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
@@ -142,6 +147,7 @@ export class ProjectService {
       startDate: string;
       endDate: string;
       teamId: string;
+      managerId?: string;
     },
     actor: AuthUserPayload
   ) {
@@ -156,6 +162,17 @@ export class ProjectService {
       throw new BadRequestError('Specified team does not exist');
     }
 
+    let managerObjectId: Types.ObjectId | null = null;
+    if (data.managerId) {
+      const manager = await User.findById(data.managerId);
+      if (!manager || !manager.isActive || manager.role !== USER_ROLES.MANAGER) {
+        throw new BadRequestError('Assigned manager must be an active user with MANAGER role');
+      }
+      managerObjectId = manager._id;
+    } else if (team.managerId) {
+      managerObjectId = team.managerId;
+    }
+
     const project = await Project.create({
       name: data.name,
       description: data.description,
@@ -163,6 +180,7 @@ export class ProjectService {
       startDate: new Date(data.startDate),
       endDate: new Date(data.endDate),
       teamId: team._id,
+      managerId: managerObjectId || undefined,
       status: PROJECT_STATUS.ACTIVE,
       createdBy: actor._id,
     });
@@ -179,6 +197,8 @@ export class ProjectService {
       startDate?: string;
       endDate?: string;
       status?: ProjectStatus;
+      teamId?: string;
+      managerId?: string | null;
     },
     actor: AuthUserPayload
   ) {
@@ -193,14 +213,72 @@ export class ProjectService {
       }
     }
 
+    if (data.startDate || data.endDate) {
+      const effectiveStart = data.startDate ? new Date(data.startDate) : project.startDate;
+      const effectiveEnd = data.endDate ? new Date(data.endDate) : project.endDate;
+      if (effectiveEnd < effectiveStart) {
+        throw new BadRequestError('End date must be greater than or equal to start date');
+      }
+      if (data.startDate) project.startDate = effectiveStart;
+      if (data.endDate) project.endDate = effectiveEnd;
+    }
+
     if (data.name) project.name = data.name;
     if (data.description !== undefined) project.description = data.description;
     if (data.client) project.client = data.client;
-    if (data.startDate) project.startDate = new Date(data.startDate);
-    if (data.endDate) project.endDate = new Date(data.endDate);
     if (data.status) project.status = data.status;
 
+    if (data.teamId && actor.role === USER_ROLES.ADMIN) {
+      const team = await Team.findById(data.teamId);
+      if (!team) {
+        throw new BadRequestError('Specified team does not exist');
+      }
+      project.teamId = team._id;
+      await Task.updateMany({ projectId: project._id }, { teamId: team._id });
+    }
+
+    if (data.managerId !== undefined) {
+      if (data.managerId === null || data.managerId === '') {
+        project.managerId = undefined;
+      } else {
+        const manager = await User.findById(data.managerId);
+        if (!manager || !manager.isActive || manager.role !== USER_ROLES.MANAGER) {
+          throw new BadRequestError('Assigned manager must be an active user with MANAGER role');
+        }
+        project.managerId = manager._id;
+      }
+    }
+
     await project.save();
-    return project;
+
+    const populated = await Project.findById(project._id)
+      .populate('teamId', 'name description')
+      .populate('managerId', 'name email role')
+      .populate('createdBy', 'name email');
+
+    return populated || project;
+  }
+
+  static async deleteProject(projectId: string, actor: AuthUserPayload) {
+    if (actor.role !== USER_ROLES.ADMIN) {
+      throw new ForbiddenError('Only Admins are permitted to delete projects');
+    }
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    // Cascade deletion of tasks and activities
+    const tasks = await Task.find({ projectId: project._id });
+    const taskIds = tasks.map((t) => t._id);
+
+    if (taskIds.length > 0) {
+      await Activity.deleteMany({ taskId: { $in: taskIds } });
+      await Task.deleteMany({ _id: { $in: taskIds } });
+    }
+
+    await Project.findByIdAndDelete(project._id);
+    return { success: true, message: 'Project and all associated tasks deleted successfully' };
   }
 }

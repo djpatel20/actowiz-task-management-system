@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '../../shared/types/index.js';
 import { UserService } from './user.service.js';
 
 export class UserController {
@@ -44,9 +45,9 @@ export class UserController {
     }
   }
 
-  static async updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async updateUser(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const user = await UserService.updateUser(req.params.id, req.body);
+      const user = await UserService.updateUser(req.params.id, req.body, req.user);
       res.status(200).json({
         success: true,
         data: user,

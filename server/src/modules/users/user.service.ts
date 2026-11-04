@@ -3,7 +3,8 @@ import { FilterQuery, Types } from 'mongoose';
 import { User, IUserDocument } from './user.model.js';
 import { Team } from '../teams/team.model.js';
 import { AuthService } from '../auth/auth.service.js';
-import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError.js';
+import { BadRequestError, ConflictError, NotFoundError, ForbiddenError } from '../../shared/errors/AppError.js';
+import { AuthUserPayload } from '../../shared/types/index.js';
 import { USER_ROLES, UserRole } from '../../config/constants.js';
 
 export class UserService {
@@ -111,8 +112,13 @@ export class UserService {
       email?: string;
       role?: UserRole;
       teamId?: string | null;
-    }
+    },
+    actor?: AuthUserPayload
   ) {
+    if (data.role && actor && (actor._id?.toString() === userId || (actor as { id?: string }).id === userId)) {
+      throw new ForbiddenError('Users cannot change their own role');
+    }
+
     const user = await User.findById(userId);
     if (!user) {
       throw new NotFoundError('User not found');
@@ -127,10 +133,22 @@ export class UserService {
     }
 
     if (data.name) user.name = data.name;
-    if (data.role) user.role = data.role;
+
+    if (data.role && data.role !== user.role) {
+      if (user.role === USER_ROLES.MANAGER && data.role !== USER_ROLES.MANAGER) {
+        await Team.updateMany({ managerId: user._id }, { $unset: { managerId: 1 } });
+      }
+      user.role = data.role;
+      if (data.role === USER_ROLES.ADMIN) {
+        user.teamId = undefined;
+      }
+    }
 
     if (data.teamId !== undefined) {
-      if (data.teamId === null) {
+      if (data.teamId === null || data.role === USER_ROLES.ADMIN) {
+        if (user.role === USER_ROLES.MANAGER && user.teamId) {
+          await Team.findByIdAndUpdate(user.teamId, { $unset: { managerId: 1 } });
+        }
         user.teamId = undefined;
       } else {
         const team = await Team.findById(data.teamId);
@@ -138,6 +156,9 @@ export class UserService {
           throw new BadRequestError('Specified team does not exist');
         }
         user.teamId = team._id;
+        if (user.role === USER_ROLES.MANAGER) {
+          await Team.findByIdAndUpdate(team._id, { managerId: user._id });
+        }
       }
     }
 

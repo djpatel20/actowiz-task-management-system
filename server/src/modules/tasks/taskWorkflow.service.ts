@@ -79,6 +79,14 @@ export class TaskWorkflowService {
       if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
         throw new NotFoundError('Task not found');
       }
+
+      const isProjectManager =
+        project.managerId?.toString() === actor._id.toString() ||
+        (!project.managerId && task.teamId.toString() === actor.teamId.toString());
+
+      if (!isProjectManager || (project.managerId && project.managerId.toString() !== actor._id.toString())) {
+        throw new ForbiddenError('Managers can only review and transition tasks in projects where they are assigned as manager');
+      }
     }
 
     // 5. State Machine Validation

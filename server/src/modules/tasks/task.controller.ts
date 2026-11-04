@@ -59,6 +59,18 @@ export class TaskController {
     }
   }
 
+  static async deleteTask(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await TaskService.deleteTask(req.params.id, req.user!);
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async transitionStatus(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { status, version, rejectionReason } = req.body;

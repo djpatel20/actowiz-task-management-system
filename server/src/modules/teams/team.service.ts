@@ -2,8 +2,10 @@ import { FilterQuery, Types } from 'mongoose';
 import { Team, ITeamDocument } from './team.model.js';
 import { User } from '../users/user.model.js';
 import { Project } from '../projects/project.model.js';
+import { Task } from '../tasks/task.model.js';
+import { Activity } from '../activity/activity.model.js';
 import { AuthUserPayload } from '../../shared/types/index.js';
-import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 export class TeamService {
@@ -174,6 +176,40 @@ export class TeamService {
     return team;
   }
 
+  static async deleteTeam(teamId: string, actor: AuthUserPayload) {
+    if (actor.role !== USER_ROLES.ADMIN) {
+      throw new ForbiddenError('Only Admins are permitted to delete teams');
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team) {
+      throw new NotFoundError('Team not found');
+    }
+
+    // Unassign users who belonged to this team
+    await User.updateMany({ teamId: team._id }, { $unset: { teamId: 1 } });
+
+    // Find all projects in this team
+    const projects = await Project.find({ teamId: team._id });
+    const projectIds = projects.map((p) => p._id);
+
+    // Find tasks in this team
+    const tasks = await Task.find({ teamId: team._id });
+    const taskIds = tasks.map((t) => t._id);
+
+    if (taskIds.length > 0) {
+      await Activity.deleteMany({ taskId: { $in: taskIds } });
+      await Task.deleteMany({ _id: { $in: taskIds } });
+    }
+
+    if (projectIds.length > 0) {
+      await Project.deleteMany({ _id: { $in: projectIds } });
+    }
+
+    await Team.findByIdAndDelete(team._id);
+    return { success: true, message: 'Team and associated resources deleted successfully' };
+  }
+
   static async getTeamMembers(teamId: string, actor: AuthUserPayload) {
     if (actor.role !== USER_ROLES.ADMIN) {
       if (!actor.teamId || actor.teamId.toString() !== teamId) {
@@ -181,12 +217,24 @@ export class TeamService {
       }
     }
 
+    const team = await Team.findById(teamId).lean();
+    if (!team) {
+      throw new NotFoundError('Team not found');
+    }
+
+    const managerFilter = team.managerId ? [{ _id: team.managerId }] : [];
+
+    // Fetch both Employees and Managers who belong to or lead this team
     const members = await User.find({
-      teamId: new Types.ObjectId(teamId),
-      role: USER_ROLES.EMPLOYEE,
+      $or: [
+        { teamId: new Types.ObjectId(teamId) },
+        ...managerFilter,
+      ],
+      role: { $in: [USER_ROLES.EMPLOYEE, USER_ROLES.MANAGER] },
       isActive: true,
     })
       .select('name email role teamId isActive')
+      .sort({ role: 1, name: 1 })
       .lean();
 
     return members;

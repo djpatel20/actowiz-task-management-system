@@ -8,6 +8,7 @@ export interface IProject {
   startDate: Date;
   endDate: Date;
   teamId: Types.ObjectId;
+  managerId?: Types.ObjectId;
   status: ProjectStatus;
   createdBy: Types.ObjectId;
   createdAt: Date;
@@ -52,6 +53,11 @@ const projectSchema = new Schema<IProjectDocument>(
       ref: 'Team',
       required: true,
     },
+    managerId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: false,
+    },
     status: {
       type: String,
       enum: Object.values(PROJECT_STATUS),
@@ -75,7 +81,23 @@ const projectSchema = new Schema<IProjectDocument>(
   }
 );
 
+projectSchema.pre('save', async function (next) {
+  if (!this.managerId && this.teamId) {
+    try {
+      const TeamModel = model('Team');
+      const team = await TeamModel.findById(this.teamId);
+      if (team?.managerId) {
+        this.managerId = team.managerId;
+      }
+    } catch {
+      // Continue if Team model not yet loaded
+    }
+  }
+  next();
+});
+
 projectSchema.index({ teamId: 1, status: 1 });
+projectSchema.index({ managerId: 1 });
 projectSchema.index({ client: 1 });
 projectSchema.index({ startDate: 1, endDate: 1 });
 

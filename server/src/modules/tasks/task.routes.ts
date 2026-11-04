@@ -37,6 +37,12 @@ router.patch(
   TaskController.updateTask
 );
 
+router.delete(
+  '/:id',
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.MANAGER),
+  TaskController.deleteTask
+);
+
 router.patch(
   '/:id/status',
   validateRequest({ body: transitionStatusSchema }),

@@ -34,6 +34,12 @@ router.patch(
   TeamController.updateTeam
 );
 
+router.delete(
+  '/:id',
+  requireRole(USER_ROLES.ADMIN),
+  TeamController.deleteTeam
+);
+
 router.get('/:id/members', TeamController.getTeamMembers);
 
 export default router;

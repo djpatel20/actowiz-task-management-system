@@ -4,7 +4,10 @@ import crypto from 'crypto';
 import { FilterQuery, Types } from 'mongoose';
 import { Task, ITaskDocument, IAttachment } from './task.model.js';
 import { Project } from '../projects/project.model.js';
+import { Team } from '../teams/team.model.js';
 import { User } from '../users/user.model.js';
+import { Comment } from '../comments/comment.model.js';
+import { Activity } from '../activity/activity.model.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import { validateFileBuffer } from '../../utils/fileValidator.js';
@@ -55,7 +58,27 @@ export class TaskService {
       if (!actor.teamId) {
         return { tasks: [], total: 0, page: 1, limit, totalPages: 0 };
       }
-      filter.teamId = actor.teamId;
+
+      // Filter only tasks from projects where this manager is added as manager
+      const managedProjects = await Project.find({
+        $or: [
+          { managerId: actor._id },
+          { teamId: actor.teamId, managerId: { $exists: false } },
+          { teamId: actor.teamId, managerId: null },
+        ],
+      }).select('_id');
+
+      const managedProjectIds = managedProjects.map((p) => p._id);
+      filter.projectId = { $in: managedProjectIds };
+
+      if (query.projectId) {
+        const reqProjectId = new Types.ObjectId(query.projectId);
+        if (!managedProjectIds.some((pId) => pId.equals(reqProjectId))) {
+          return { tasks: [], total: 0, page: 1, limit, totalPages: 0 };
+        }
+        filter.projectId = reqProjectId;
+      }
+
       if (query.assigneeId) {
         filter.assigneeId = new Types.ObjectId(query.assigneeId);
       }
@@ -66,7 +89,7 @@ export class TaskService {
     }
 
     // 2. Query filters
-    if (query.projectId) {
+    if (query.projectId && actor.role !== USER_ROLES.MANAGER) {
       filter.projectId = new Types.ObjectId(query.projectId);
     }
     if (query.status) {
@@ -91,7 +114,7 @@ export class TaskService {
 
     const [tasks, total] = await Promise.all([
       Task.find(filter)
-        .populate('projectId', 'name client status')
+        .populate('projectId', 'name client status managerId')
         .populate('teamId', 'name')
         .populate('assigneeId', 'name email role')
         .populate('createdBy', 'name email')
@@ -113,7 +136,7 @@ export class TaskService {
 
   static async getTaskById(taskId: string, actor: AuthUserPayload) {
     const task = await Task.findById(taskId)
-      .populate('projectId', 'name client status')
+      .populate('projectId', 'name client status managerId')
       .populate('teamId', 'name')
       .populate('assigneeId', 'name email role')
       .populate('createdBy', 'name email')
@@ -125,11 +148,22 @@ export class TaskService {
 
     // RBAC IDOR check
     if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || task.teamId._id.toString() !== actor.teamId.toString()) {
+      const pTeamId = (task.teamId as { _id?: Types.ObjectId } | null)?._id || task.teamId;
+      if (!actor.teamId || pTeamId.toString() !== actor.teamId.toString()) {
+        throw new NotFoundError('Task not found');
+      }
+
+      const pObj = task.projectId as { managerId?: Types.ObjectId | string } | null;
+      const isProjectManager =
+        (pObj?.managerId && pObj.managerId.toString() === actor._id.toString()) ||
+        (!pObj?.managerId && pTeamId.toString() === actor.teamId.toString());
+
+      if (!isProjectManager || (pObj?.managerId && pObj.managerId.toString() !== actor._id.toString())) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
-      if (task.assigneeId._id.toString() !== actor._id.toString()) {
+      const aId = (task.assigneeId as { _id?: Types.ObjectId } | null)?._id || task.assigneeId;
+      if (aId.toString() !== actor._id.toString()) {
         throw new NotFoundError('Task not found');
       }
     }
@@ -153,12 +187,6 @@ export class TaskService {
       throw new ForbiddenError('Employees are not authorized to create tasks');
     }
 
-    if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || actor.teamId.toString() !== data.teamId) {
-        throw new ForbiddenError('Managers can only create tasks for their own team');
-      }
-    }
-
     const project = await Project.findById(data.projectId);
     if (!project) {
       throw new BadRequestError('Specified project does not exist');
@@ -172,12 +200,35 @@ export class TaskService {
       throw new BadRequestError('Task teamId must strictly match project teamId');
     }
 
-    const assignee = await User.findById(data.assigneeId);
-    if (!assignee || !assignee.isActive || assignee.role !== USER_ROLES.EMPLOYEE) {
-      throw new BadRequestError('Assignee must be an active Employee');
+    if (actor.role === USER_ROLES.MANAGER) {
+      if (!actor.teamId || actor.teamId.toString() !== data.teamId) {
+        throw new ForbiddenError('Managers can only create tasks for their own team');
+      }
+
+      const isProjectManager =
+        project.managerId?.toString() === actor._id.toString() ||
+        (!project.managerId && actor.teamId.toString() === data.teamId);
+
+      if (!isProjectManager || (project.managerId && project.managerId.toString() !== actor._id.toString())) {
+        throw new ForbiddenError('Managers can only create tasks in projects where they are assigned as manager');
+      }
     }
 
-    if (!assignee.teamId || assignee.teamId.toString() !== data.teamId) {
+    const assignee = await User.findById(data.assigneeId);
+    if (
+      !assignee ||
+      !assignee.isActive ||
+      (assignee.role !== USER_ROLES.EMPLOYEE && assignee.role !== USER_ROLES.MANAGER)
+    ) {
+      throw new BadRequestError('Assignee must be an active Employee or Manager');
+    }
+
+    const team = await Team.findById(data.teamId);
+    const isMemberOfTeam =
+      (assignee.teamId && assignee.teamId.toString() === data.teamId) ||
+      (team?.managerId && team.managerId.toString() === assignee._id.toString());
+
+    if (!isMemberOfTeam) {
       throw new BadRequestError('Assignee must belong to the specified team');
     }
 
@@ -240,15 +291,23 @@ export class TaskService {
       throw new NotFoundError('Task not found');
     }
 
+    const project = await Project.findById(task.projectId);
+    if (!project || project.status === PROJECT_STATUS.ARCHIVED) {
+      throw new BadRequestError('Cannot edit tasks belonging to an archived project');
+    }
+
     if (actor.role === USER_ROLES.MANAGER) {
       if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
         throw new NotFoundError('Task not found');
       }
-    }
 
-    const project = await Project.findById(task.projectId);
-    if (!project || project.status === PROJECT_STATUS.ARCHIVED) {
-      throw new BadRequestError('Cannot edit tasks belonging to an archived project');
+      const isProjectManager =
+        project.managerId?.toString() === actor._id.toString() ||
+        (!project.managerId && task.teamId.toString() === actor.teamId.toString());
+
+      if (!isProjectManager || (project.managerId && project.managerId.toString() !== actor._id.toString())) {
+        throw new ForbiddenError('Managers can only manage and assign tasks in projects where they are assigned as manager');
+      }
     }
 
     let reassigned = false;
@@ -256,10 +315,20 @@ export class TaskService {
 
     if (data.assigneeId && data.assigneeId !== task.assigneeId.toString()) {
       const newAssignee = await User.findById(data.assigneeId);
-      if (!newAssignee || !newAssignee.isActive || newAssignee.role !== USER_ROLES.EMPLOYEE) {
-        throw new BadRequestError('Assignee must be an active Employee');
+      if (
+        !newAssignee ||
+        !newAssignee.isActive ||
+        (newAssignee.role !== USER_ROLES.EMPLOYEE && newAssignee.role !== USER_ROLES.MANAGER)
+      ) {
+        throw new BadRequestError('Assignee must be an active Employee or Manager');
       }
-      if (!newAssignee.teamId || newAssignee.teamId.toString() !== task.teamId.toString()) {
+
+      const taskTeam = await Team.findById(task.teamId);
+      const isMemberOfTeam =
+        (newAssignee.teamId && newAssignee.teamId.toString() === task.teamId.toString()) ||
+        (taskTeam?.managerId && taskTeam.managerId.toString() === newAssignee._id.toString());
+
+      if (!isMemberOfTeam) {
         throw new BadRequestError('Assignee must belong to the task team');
       }
 
@@ -308,6 +377,61 @@ export class TaskService {
     return task;
   }
 
+  static async deleteTask(taskId: string, actor: AuthUserPayload) {
+    if (actor.role === USER_ROLES.EMPLOYEE) {
+      throw new ForbiddenError('Employees are not authorized to delete tasks');
+    }
+
+    const task = await Task.findById(taskId);
+    if (!task) {
+      throw new NotFoundError('Task not found');
+    }
+
+    const project = await Project.findById(task.projectId);
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    if (project.status === PROJECT_STATUS.ARCHIVED) {
+      throw new BadRequestError('Cannot delete tasks belonging to an archived project');
+    }
+
+    if (actor.role === USER_ROLES.MANAGER) {
+      if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
+        throw new NotFoundError('Task not found');
+      }
+
+      const isProjectManager =
+        project.managerId?.toString() === actor._id.toString() ||
+        (!project.managerId && task.teamId.toString() === actor.teamId.toString());
+
+      if (!isProjectManager || (project.managerId && project.managerId.toString() !== actor._id.toString())) {
+        throw new ForbiddenError('Managers can only delete tasks in projects where they are assigned as manager');
+      }
+    }
+
+    // Clean up attachment files from disk
+    if (task.attachments && task.attachments.length > 0) {
+      for (const att of task.attachments) {
+        const filePath = path.resolve(process.cwd(), 'uploads/attachments', att.filename);
+        try {
+          await fs.unlink(filePath);
+        } catch {
+          // File may already be deleted
+        }
+      }
+    }
+
+    // Delete associated comments and activities
+    await Promise.all([
+      Comment.deleteMany({ taskId: task._id }),
+      Activity.deleteMany({ taskId: task._id }),
+      Task.findByIdAndDelete(task._id),
+    ]);
+
+    return { success: true, message: 'Task deleted successfully' };
+  }
+
   static async uploadAttachment(
     taskId: string,
     file: Express.Multer.File | undefined,
@@ -325,6 +449,13 @@ export class TaskService {
     // RBAC IDOR check
     if (actor.role === USER_ROLES.MANAGER) {
       if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
+        throw new NotFoundError('Task not found');
+      }
+      const project = await Project.findById(task.projectId);
+      const isProjectManager =
+        project?.managerId?.toString() === actor._id.toString() ||
+        (!project?.managerId && task.teamId.toString() === actor.teamId.toString());
+      if (!isProjectManager || (project?.managerId && project.managerId.toString() !== actor._id.toString())) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
@@ -387,6 +518,13 @@ export class TaskService {
       if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
         throw new NotFoundError('Task not found');
       }
+      const project = await Project.findById(task.projectId);
+      const isProjectManager =
+        project?.managerId?.toString() === actor._id.toString() ||
+        (!project?.managerId && task.teamId.toString() === actor.teamId.toString());
+      if (!isProjectManager || (project?.managerId && project.managerId.toString() !== actor._id.toString())) {
+        throw new NotFoundError('Task not found');
+      }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
       if (task.assigneeId.toString() !== actor._id.toString()) {
         throw new NotFoundError('Task not found');
@@ -408,6 +546,13 @@ export class TaskService {
 
     if (actor.role === USER_ROLES.MANAGER) {
       if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
+        throw new NotFoundError('Task not found');
+      }
+      const project = await Project.findById(task.projectId);
+      const isProjectManager =
+        project?.managerId?.toString() === actor._id.toString() ||
+        (!project?.managerId && task.teamId.toString() === actor.teamId.toString());
+      if (!isProjectManager || (project?.managerId && project.managerId.toString() !== actor._id.toString())) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
@@ -447,6 +592,13 @@ export class TaskService {
 
     if (actor.role === USER_ROLES.MANAGER) {
       if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
+        throw new NotFoundError('Task not found');
+      }
+      const project = await Project.findById(task.projectId);
+      const isProjectManager =
+        project?.managerId?.toString() === actor._id.toString() ||
+        (!project?.managerId && task.teamId.toString() === actor.teamId.toString());
+      if (!isProjectManager || (project?.managerId && project.managerId.toString() !== actor._id.toString())) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
