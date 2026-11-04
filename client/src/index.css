@@ -4,13 +4,59 @@
 
 @layer base {
   body {
-    background-color: #F7F7F4;
-    color: #252824;
+    background-color: #F8FAFC;
+    color: #1E1B26;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', 'Inter', -apple-system, sans-serif;
+    letter-spacing: -0.015em;
   }
 }
 
-/* Custom restrained scrollbars */
+/* Actowiz Branding Utilities & Animation Helpers */
+.bg-gradient-acto {
+  background: linear-gradient(135deg, #4400CE 0%, #290660 100%);
+}
+
+.bg-gradient-acto-subtle {
+  background: linear-gradient(135deg, rgba(68, 0, 206, 0.06) 0%, rgba(41, 6, 96, 0.03) 100%);
+}
+
+.bg-gradient-orange {
+  background: linear-gradient(135deg, #FF7A1A 0%, #FF6B00 100%);
+}
+
+.acto-glow-orange {
+  box-shadow: 0 4px 14px rgba(255, 107, 0, 0.35);
+}
+
+.acto-glow-purple {
+  box-shadow: 0 4px 16px rgba(68, 0, 206, 0.3);
+}
+
+/* Card lift animation on hover - matches Actowiz style */
+.acto-card {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.acto-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -3px rgba(41, 6, 96, 0.08), 0 3px 8px -2px rgba(41, 6, 96, 0.04);
+  border-color: #D3CCED;
+}
+
+/* Button interactive bounce / scale */
+.btn-acto {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-acto:active {
+  transform: scale(0.98);
+}
+
+/* Smooth custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -21,10 +67,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #E5E6E1;
-  border-radius: 3px;
+  background: #CBD5E1;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #969A94;
+  background: #94A3B8;
 }

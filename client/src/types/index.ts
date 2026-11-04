@@ -23,12 +23,14 @@ export type NotificationType =
 
 export interface User {
   id: string;
+  _id?: string;
   name: string;
   email: string;
   role: UserRole;
   teamId?: string | null;
   team?: {
     id: string;
+    _id?: string;
     name: string;
     description?: string;
   } | null;
@@ -41,7 +43,7 @@ export interface Team {
   id?: string;
   name: string;
   description?: string;
-  managerId?: User | null;
+  managerId?: User | { _id: string; name: string; email: string; role?: UserRole } | null;
   projectCount?: number;
   memberCount?: number;
   createdAt?: string;
@@ -55,7 +57,8 @@ export interface Project {
   client: string;
   startDate: string;
   endDate: string;
-  teamId: Team | string;
+  teamId: Team | { _id: string; name: string; description?: string } | string;
+  managerId?: User | { _id: string; name: string; email: string; role?: UserRole } | null;
   status: ProjectStatus;
   progressPercentage?: number;
   totalTasks?: number;
