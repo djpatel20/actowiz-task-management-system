@@ -28,6 +28,7 @@ export interface User {
   email: string;
   role: UserRole;
   teamId?: string | null;
+  teamIds?: string[];
   team?: {
     id: string;
     _id?: string;
@@ -44,7 +45,12 @@ export interface Team {
   name: string;
   description?: string;
   managerId?: User | { _id: string; name: string; email: string; role?: UserRole } | null;
+  managerIds?: string[];
+  memberIds?: string[];
+  managers?: (User | { _id: string; name: string; email: string; role?: UserRole })[];
   projectCount?: number;
+  managerCount?: number;
+  employeeCount?: number;
   memberCount?: number;
   createdAt?: string;
 }

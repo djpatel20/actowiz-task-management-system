@@ -1,5 +1,5 @@
 import { apiClient } from '../../lib/axios.js';
-import { ApiResponse, Task } from '../../types/index.js';
+import { ApiResponse, Project, Task, Team } from '../../types/index.js';
 
 export interface DashboardStats {
   openTasks: number;
@@ -8,6 +8,9 @@ export interface DashboardStats {
   overdueTasks: number;
   totalProjects: number;
   recentTasks: Task[];
+  recentProjects?: Project[];
+  myTeam?: Team | null;
+  myTeams?: Team[];
 }
 
 export const dashboardApi = {

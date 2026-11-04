@@ -48,9 +48,18 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const projects = user?.role === 'MANAGER'
     ? allProjects.filter((p) => {
         const pManagerId = p.managerId
-          ? (typeof p.managerId === 'string' ? p.managerId : (p.managerId as { _id?: string; id?: string })._id || (p.managerId as { id?: string }).id)
+          ? (typeof p.managerId === 'string'
+              ? p.managerId
+              : (p.managerId as { _id?: string; id?: string })._id || (p.managerId as { id?: string }).id)
           : null;
-        return pManagerId ? pManagerId === user.id : true;
+        const pTeamId = p.teamId
+          ? (typeof p.teamId === 'string'
+              ? p.teamId
+              : (p.teamId as { _id?: string; id?: string })._id || (p.teamId as { id?: string }).id)
+          : null;
+        const isMgr = Boolean(pManagerId && (pManagerId === user.id || pManagerId === user._id));
+        const isTeam = Boolean(user.teamId && pTeamId && pTeamId === user.teamId);
+        return isMgr || isTeam;
       })
     : allProjects;
   const selectedProject = projects.find((p) => p._id === projectId);

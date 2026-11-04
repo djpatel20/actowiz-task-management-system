@@ -3,8 +3,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsApi } from './teamsApi.js';
 import { usersApi } from '../users/usersApi.js';
 import { useAuth } from '../auth/AuthContext.js';
-import { Building2, Plus, Users, FolderKanban, X, Trash2, Edit3, AlertTriangle } from 'lucide-react';
-import { Team } from '../../types/index.js';
+import {
+  Building2,
+  Plus,
+  Users,
+  FolderKanban,
+  X,
+  Trash2,
+  Edit3,
+  AlertTriangle,
+  UserPlus,
+  UserMinus,
+  ShieldCheck,
+} from 'lucide-react';
+import { Team, User } from '../../types/index.js';
 
 export const TeamsPage: React.FC = () => {
   const { user } = useAuth();
@@ -12,11 +24,11 @@ export const TeamsPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
   const [teamToEdit, setTeamToEdit] = useState<Team | null>(null);
+  const [teamForMembers, setTeamForMembers] = useState<Team | null>(null);
 
   // Create form state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [managerId, setManagerId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // Edit form state
@@ -27,6 +39,10 @@ export const TeamsPage: React.FC = () => {
 
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Member management state
+  const [selectedUserIdToAdd, setSelectedUserIdToAdd] = useState('');
+  const [memberError, setMemberError] = useState<string | null>(null);
+
   const { data: teams = [], isLoading } = useQuery({
     queryKey: ['teams'],
     queryFn: () => teamsApi.listTeams(),
@@ -35,9 +51,26 @@ export const TeamsPage: React.FC = () => {
   const { data: managersData } = useQuery({
     queryKey: ['managers'],
     queryFn: () => usersApi.listUsers({ role: 'MANAGER', isActive: true, limit: 100 }),
-    enabled: isModalOpen || !!teamToEdit,
+    enabled: !!teamToEdit,
   });
   const managers = managersData?.users || [];
+
+  // Active users query for adding to team roster
+  const { data: allUsersData } = useQuery({
+    queryKey: ['all-assignable-users'],
+    queryFn: () => usersApi.listUsers({ isActive: true, limit: 200 }),
+    enabled: !!teamForMembers && user?.role === 'ADMIN',
+  });
+  const assignableUsers = (allUsersData?.users || []).filter(
+    (u) => u.role === 'MANAGER' || u.role === 'EMPLOYEE'
+  );
+
+  // Team members query for current team
+  const { data: teamMembers = [], isLoading: isLoadingMembers } = useQuery({
+    queryKey: ['team-members', teamForMembers?._id],
+    queryFn: () => (teamForMembers ? teamsApi.getTeamMembers(teamForMembers._id) : Promise.resolve([])),
+    enabled: !!teamForMembers,
+  });
 
   const getManagerIdString = (mgr: unknown): string => {
     if (!mgr) return '';
@@ -52,7 +85,6 @@ export const TeamsPage: React.FC = () => {
       setIsModalOpen(false);
       setName('');
       setDescription('');
-      setManagerId('');
       setError(null);
       queryClient.invalidateQueries({ queryKey: ['teams'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -107,13 +139,53 @@ export const TeamsPage: React.FC = () => {
     },
   });
 
+  const addMemberMutation = useMutation({
+    mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) =>
+      teamsApi.addTeamMember(teamId, userId),
+    onSuccess: () => {
+      setSelectedUserIdToAdd('');
+      setMemberError(null);
+      if (teamForMembers) {
+        queryClient.invalidateQueries({ queryKey: ['team-members', teamForMembers._id] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message || 'Failed to add member to team';
+      setMemberError(msg);
+    },
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) =>
+      teamsApi.removeTeamMember(teamId, userId),
+    onSuccess: () => {
+      setMemberError(null);
+      if (teamForMembers) {
+        queryClient.invalidateQueries({ queryKey: ['team-members', teamForMembers._id] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message || 'Failed to remove member from team';
+      setMemberError(msg);
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     createMutation.mutate({
       name: name.trim(),
       description: description.trim() || undefined,
-      managerId: managerId || undefined,
     });
   };
 
@@ -143,6 +215,15 @@ export const TeamsPage: React.FC = () => {
     deleteMutation.mutate(teamToDelete._id);
   };
 
+  const handleAddMemberSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!teamForMembers || !selectedUserIdToAdd) return;
+    addMemberMutation.mutate({
+      teamId: teamForMembers._id,
+      userId: selectedUserIdToAdd,
+    });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -159,7 +240,6 @@ export const TeamsPage: React.FC = () => {
             onClick={() => {
               setName('');
               setDescription('');
-              setManagerId('');
               setError(null);
               setIsModalOpen(true);
             }}
@@ -181,7 +261,6 @@ export const TeamsPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {teams.map((t) => {
-            const manager = t.managerId as { name?: string; email?: string } | null;
             return (
               <div
                 key={t._id}
@@ -226,27 +305,198 @@ export const TeamsPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-3 pt-3 border-t border-[#E2E8F0]">
-                  <div className="text-xs">
-                    <span className="text-[11px] font-medium text-[#5B616E]">Manager: </span>
-                    <span className="font-bold text-[#1E1B26] font-heading">
-                      {manager?.name ? `${manager.name} (${manager.email})` : 'Unassigned'}
-                    </span>
-                  </div>
-
                   <div className="flex items-center justify-between text-[11px] text-[#5B616E]">
                     <div className="flex items-center space-x-1">
                       <Users className="w-3.5 h-3.5 text-[#94A3B8]" />
-                      <span>{t.memberCount ?? 0} Employees</span>
+                      <span>{t.memberCount ?? ((t.managerCount ?? 0) + (t.employeeCount ?? 0))} Members</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <FolderKanban className="w-3.5 h-3.5 text-[#94A3B8]" />
                       <span>{t.projectCount ?? 0} Projects</span>
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeamForMembers(t);
+                      setSelectedUserIdToAdd('');
+                      setMemberError(null);
+                    }}
+                    className="w-full mt-2 flex items-center justify-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-[#4400CE] bg-[#4400CE]/5 hover:bg-[#4400CE]/10 border border-[#4400CE]/20 rounded-lg transition-colors font-heading"
+                  >
+                    <Users className="w-3.5 h-3.5 text-[#FF6B00]" />
+                    <span>View Members ({t.memberCount ?? 0})</span>
+                  </button>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Team Members Management Modal */}
+      {teamForMembers && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-acto-lg max-w-lg w-full p-6 animate-pop-in flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#E2E8F0] shrink-0">
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#4400CE] to-[#290660] flex items-center justify-center text-white">
+                  <Users className="w-4 h-4 text-[#FF6B00]" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold font-heading text-[#1E1B26]">
+                    Team Members
+                  </h3>
+                  <p className="text-[11px] text-[#5B616E] font-sans">{teamForMembers.name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTeamForMembers(null)}
+                className="text-[#94A3B8] hover:text-[#1E1B26]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {memberError && (
+              <div className="mb-4 p-2.5 rounded-lg bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-xs shrink-0">
+                {memberError}
+              </div>
+            )}
+
+            {/* Admin Add Member Form */}
+            {user?.role === 'ADMIN' && (
+              <form onSubmit={handleAddMemberSubmit} className="mb-4 pb-4 border-b border-[#E2E8F0] shrink-0">
+                <label className="block text-xs font-semibold text-[#1E1B26] mb-1.5 font-heading">
+                  Add Manager or Employee to Team
+                </label>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedUserIdToAdd}
+                    onChange={(e) => setSelectedUserIdToAdd(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
+                  >
+                    <option value="">Select a Manager or Employee...</option>
+                    {assignableUsers.map((u) => {
+                      const uId = u._id || u.id;
+                      const isCurrentMember = teamMembers.some(
+                        (m) => (m._id || m.id) === uId
+                      );
+                      return (
+                        <option
+                          key={uId}
+                          value={uId}
+                          disabled={isCurrentMember}
+                        >
+                          {u.name} — [{u.role}] {isCurrentMember ? '✓ Already in this team' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <button
+                    type="submit"
+                    disabled={!selectedUserIdToAdd || addMemberMutation.isPending}
+                    className="flex items-center space-x-1 px-3.5 py-2 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all disabled:opacity-50 font-heading shrink-0"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-[#FF6B00]" />
+                    <span>{addMemberMutation.isPending ? 'Adding...' : 'Add'}</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#5B616E] mt-1">
+                  You can add any number of managers and employees to this team. Users can belong to multiple teams.
+                </p>
+              </form>
+            )}
+
+            {/* Current Team Roster */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              <h4 className="text-xs font-semibold font-heading text-[#1E1B26] mb-2 flex items-center justify-between">
+                <span>Roster ({teamMembers.length})</span>
+                <span className="text-[10px] text-[#5B616E] font-normal">
+                  {teamMembers.filter((m) => m.role === 'MANAGER').length} Managers ·{' '}
+                  {teamMembers.filter((m) => m.role === 'EMPLOYEE').length} Employees
+                </span>
+              </h4>
+
+              {isLoadingMembers ? (
+                <div className="py-8 text-center text-xs text-[#94A3B8]">Loading roster...</div>
+              ) : teamMembers.length === 0 ? (
+                <div className="p-6 text-center bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+                  <p className="text-xs text-[#5B616E]">No managers or employees currently assigned to this team.</p>
+                </div>
+              ) : (
+                teamMembers.map((member: User) => {
+                  const mId = member._id || member.id;
+                  const isManager = member.role === 'MANAGER';
+
+                  return (
+                    <div
+                      key={mId}
+                      className="flex items-center justify-between p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg hover:border-[#CBD5E1] transition-colors"
+                    >
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 ${
+                            isManager
+                              ? 'bg-gradient-to-tr from-[#4400CE] to-[#290660]'
+                              : 'bg-gradient-to-tr from-[#3B82F6] to-[#1D4ED8]'
+                          }`}
+                        >
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="text-xs font-bold font-heading text-[#1E1B26] truncate">
+                              {member.name}
+                            </span>
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase font-heading ${
+                                isManager
+                                  ? 'bg-[#4400CE]/10 text-[#4400CE]'
+                                  : 'bg-[#3B82F6]/10 text-[#2563EB]'
+                              }`}
+                            >
+                              {member.role}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-[#5B616E] truncate">{member.email}</p>
+                        </div>
+                      </div>
+
+                      {user?.role === 'ADMIN' && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeMemberMutation.mutate({
+                              teamId: teamForMembers._id,
+                              userId: mId,
+                            })
+                          }
+                          disabled={removeMemberMutation.isPending}
+                          className="text-[#94A3B8] hover:text-[#DC2626] p-1.5 rounded-md hover:bg-[#FEF2F2] transition-colors ml-2 shrink-0"
+                          title="Remove from this team"
+                        >
+                          <UserMinus className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex items-center justify-end pt-4 mt-3 border-t border-[#E2E8F0] shrink-0">
+              <button
+                type="button"
+                onClick={() => setTeamForMembers(null)}
+                className="px-4 py-2 text-xs font-semibold text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors font-heading"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -344,28 +594,8 @@ export const TeamsPage: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#1E1B26] mb-1 font-heading">
-                  Assign Manager
-                </label>
-                <select
-                  value={managerId}
-                  onChange={(e) => setManagerId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
-                >
-                  <option value="">No Manager (Unassigned)</option>
-                  {managers.map((m) => {
-                    const mId = m._id || m.id;
-                    return (
-                      <option key={mId} value={mId}>
-                        {m.name} ({m.email})
-                      </option>
-                    );
-                  })}
-                </select>
-                <p className="text-[11px] text-[#5B616E] mt-1">
-                  Optionally select an active manager to lead this team.
-                </p>
+              <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[11px] text-[#5B616E] leading-relaxed">
+                <span className="font-semibold text-[#1E1B26]">Roster Assignment:</span> You can add multiple managers and employees after creating the team using the <span className="font-semibold text-[#4400CE]">Manage Members</span> button on the team card.
               </div>
 
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#E2E8F0]">
@@ -444,7 +674,7 @@ export const TeamsPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-[#1E1B26] mb-1 font-heading">
-                  Assigned Manager
+                  Primary Assigned Manager
                 </label>
                 <select
                   value={editManagerId}
@@ -462,7 +692,7 @@ export const TeamsPage: React.FC = () => {
                   })}
                 </select>
                 <p className="text-[11px] text-[#5B616E] mt-1">
-                  Change the assigned manager or select Unassigned to clear.
+                  Change the primary assigned manager or use Manage Members to assign multiple managers.
                 </p>
               </div>
 

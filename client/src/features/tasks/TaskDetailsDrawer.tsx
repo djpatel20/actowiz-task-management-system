@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksApi } from './tasksApi.js';
 import { teamsApi } from '../teams/teamsApi.js';
+import { useAuth } from '../auth/AuthContext.js';
 import { Task, UserRole, TaskStatus } from '../../types/index.js';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
@@ -39,6 +40,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isReassigning, setIsReassigning] = useState(false);
 
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: task, isLoading: isTaskLoading } = useQuery({
@@ -159,9 +161,15 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
       : (project.managerId._id || project.managerId.id)
     : null;
 
+  const isProjectManager = Boolean(
+    pManagerId
+      ? (pManagerId === currentUserId || pManagerId === user?._id || pManagerId === user?.id)
+      : (taskTeamId && user?.teamId && taskTeamId === user.teamId)
+  );
+
   const canManageTask =
     userRole === 'ADMIN' ||
-    (userRole === 'MANAGER' && (pManagerId ? pManagerId === currentUserId : true));
+    (userRole === 'MANAGER' && isProjectManager);
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
