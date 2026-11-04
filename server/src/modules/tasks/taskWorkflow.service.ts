@@ -117,20 +117,28 @@ export class TaskWorkflowService {
       task.assigneeId.toString() !== actor._id.toString();
 
     // 7. Atomic Execution with OCC
-    let updatedTask: ITaskDocument | null = null;
-    const session = await mongoose.startSession();
+    // Validate if MongoDB deployment supports multi-document transactions (requires Replica Set or Sharded cluster)
+    const topologyType = (mongoose.connection as any)?.client?.topology?.description?.type;
+    const supportsTransactions =
+      topologyType === 'ReplicaSetWithPrimary' ||
+      topologyType === 'ReplicaSetNoPrimary' ||
+      topologyType === 'Sharded';
 
-    let transactionStarted = false;
-    try {
-      session.startTransaction();
-      transactionStarted = true;
-    } catch {
-      // Standalone single-node mongo without replica set
-      transactionStarted = false;
+    let updatedTask: ITaskDocument | null = null;
+    let session: mongoose.ClientSession | null = null;
+
+    if (supportsTransactions) {
+      try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+      } catch (sessionErr) {
+        logger.warn('Failed to start transaction session, proceeding without transaction', sessionErr);
+        session = null;
+      }
     }
 
     try {
-      const sessionOptions = transactionStarted ? { session } : {};
+      const sessionOptions = session ? { session } : {};
 
       updatedTask = await Task.findOneAndUpdate(
         {
@@ -172,16 +180,18 @@ export class TaskWorkflowService {
         sessionOptions
       );
 
-      if (transactionStarted) {
+      if (session) {
         await session.commitTransaction();
       }
     } catch (error) {
-      if (transactionStarted) {
+      if (session) {
         await session.abortTransaction();
       }
       throw error;
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
 
     // 8. Post-Commit Real-Time Socket.IO & In-App Notifications (Isolated Error Handling)
