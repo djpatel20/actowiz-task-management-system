@@ -263,12 +263,12 @@ export const KanbanBoard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in">
       {/* Page Title */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[#252824]">Workflow Kanban Board</h1>
-          <p className="text-xs text-[#777B76] mt-0.5">
+          <h1 className="text-2xl font-bold font-heading text-[#1E1B26]">Workflow Kanban Board</h1>
+          <p className="text-xs text-[#5B616E] mt-1 font-sans">
             Strict status lifecycle with optimistic concurrency and atomic transaction logs.
           </p>
         </div>
@@ -276,7 +276,7 @@ export const KanbanBoard: React.FC = () => {
 
       {/* Error Alert with auto-rollback notification */}
       {errorMessage && (
-        <div className="p-3 bg-[#FDF2F2] border border-[#F8D7DA] text-[#C35D5D] rounded-lg text-xs flex items-center justify-between">
+        <div className="p-3 bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] rounded-xl text-xs flex items-center justify-between shadow-acto-sm animate-pop-in">
           <div className="flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMessage}</span>
@@ -284,7 +284,7 @@ export const KanbanBoard: React.FC = () => {
           <button
             type="button"
             onClick={() => setErrorMessage(null)}
-            className="text-xs underline hover:text-[#252824]"
+            className="text-xs font-semibold underline hover:text-[#B91C1C]"
           >
             Dismiss
           </button>

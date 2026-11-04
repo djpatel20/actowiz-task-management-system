@@ -8,6 +8,7 @@ import { KanbanBoard } from '../features/kanban/KanbanBoard.js';
 import { ProjectsPage } from '../features/projects/ProjectsPage.js';
 import { TeamsPage } from '../features/teams/TeamsPage.js';
 import { UsersPage } from '../features/users/UsersPage.js';
+import { Loader2 } from 'lucide-react';
 
 export const AppRoutes: React.FC = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -15,8 +16,9 @@ export const AppRoutes: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F7F7F4] text-xs font-medium text-[#777B76]">
-        Initializing workspace session...
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] text-xs font-semibold text-[#5B616E] gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-[#4400CE]" />
+        <span className="font-heading">Initializing Actowiz workspace session...</span>
       </div>
     );
   }

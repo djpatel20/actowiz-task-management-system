@@ -55,6 +55,10 @@ export const tasksApi = {
     return res.data.data;
   },
 
+  deleteTask: async (taskId: string): Promise<void> => {
+    await apiClient.delete(`/tasks/${taskId}`);
+  },
+
   transitionStatus: async (
     taskId: string,
     data: {

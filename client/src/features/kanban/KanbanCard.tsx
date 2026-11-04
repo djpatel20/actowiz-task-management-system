@@ -1,7 +1,7 @@
 import React from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { Task, TaskPriority, TaskStatus, UserRole } from '../../types/index.js';
-import { Calendar, AlertCircle, MoreVertical } from 'lucide-react';
+import { Calendar, AlertCircle } from 'lucide-react';
 import { format, isPast, isToday } from 'date-fns';
 
 interface KanbanCardProps {
@@ -37,14 +37,14 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   const getPriorityBadge = (priority: TaskPriority) => {
     switch (priority) {
       case 'URGENT':
-        return 'text-[#C35D5D] bg-[#FDF2F2] border-[#F8D7DA]';
+        return 'text-[#DC2626] bg-[#FEF2F2] border-[#FCA5A5]';
       case 'HIGH':
-        return 'text-[#B9843D] bg-[#FDF8F0] border-[#FBEAD2]';
+        return 'text-[#D97706] bg-[#FFFBEB] border-[#FDE68A]';
       case 'MEDIUM':
-        return 'text-[#547DA6] bg-[#F2F6FA] border-[#DCE7F2]';
+        return 'text-[#0071CE] bg-[#F0F7FF] border-[#BAE6FD]';
       case 'LOW':
       default:
-        return 'text-[#777B76] bg-[#F0F0EC] border-[#E5E6E1]';
+        return 'text-[#64748B] bg-[#F8FAFC] border-[#E2E8F0]';
     }
   };
 
@@ -55,17 +55,17 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group bg-white border border-[#E5E6E1] rounded-lg p-3.5 shadow-sm hover:border-[#5556A6] transition-all cursor-pointer ${
-        isDragging ? 'opacity-40 shadow-md ring-1 ring-[#5556A6]' : ''
+      className={`group bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-acto-sm acto-card transition-all cursor-pointer ${
+        isDragging ? 'opacity-40 shadow-acto-lg ring-2 ring-[#4400CE]' : ''
       }`}
       onClick={onClick}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="text-[10px] font-semibold tracking-wider uppercase text-[#777B76] truncate max-w-[150px]">
+        <span className="text-[10px] font-semibold tracking-wider uppercase text-[#5B616E] truncate max-w-[150px] font-heading">
           {project?.name || 'No Project'}
         </span>
         <span
-          className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border uppercase shrink-0 ${getPriorityBadge(
+          className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 ${getPriorityBadge(
             task.priority
           )}`}
         >
@@ -76,26 +76,26 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
       <h3
         {...listeners}
         {...attributes}
-        className="text-xs font-semibold text-[#252824] leading-snug line-clamp-2 mb-3 cursor-grab active:cursor-grabbing"
+        className="text-xs font-semibold text-[#1E1B26] leading-snug line-clamp-2 mb-3 cursor-grab active:cursor-grabbing font-sans group-hover:text-[#290660] transition-colors"
       >
         {task.title}
       </h3>
 
-      <div className="flex items-center justify-between pt-2 border-t border-[#F0F0EC] text-[11px] text-[#777B76]">
+      <div className="flex items-center justify-between pt-2 border-t border-[#F1F5F9] text-[11px] text-[#5B616E]">
         {/* Due date with overdue indicator */}
         <div className="flex items-center space-x-1.5">
           {isOverdue ? (
-            <span className="flex items-center space-x-1 text-[#C35D5D] font-medium">
+            <span className="flex items-center space-x-1 text-[#DC2626] font-semibold">
               <AlertCircle className="w-3 h-3 shrink-0" />
               <span>Overdue</span>
             </span>
           ) : dueDate ? (
-            <span className="flex items-center space-x-1">
-              <Calendar className="w-3 h-3 text-[#969A94] shrink-0" />
+            <span className="flex items-center space-x-1 text-[#64748B]">
+              <Calendar className="w-3 h-3 text-[#94A3B8] shrink-0" />
               <span>{format(dueDate, 'MMM d')}</span>
             </span>
           ) : (
-            <span>No deadline</span>
+            <span className="text-[#94A3B8]">No deadline</span>
           )}
         </div>
 
@@ -104,7 +104,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
           {assignee?.name && (
             <div
               title={`Assigned to ${assignee.name}`}
-              className="w-5 h-5 rounded-full bg-[#E5E6E1] text-[#252824] text-[9px] font-bold flex items-center justify-center shrink-0"
+              className="w-5 h-5 rounded-full bg-gradient-to-br from-[#4400CE] to-[#290660] text-white text-[9px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
             >
               {assignee.name.charAt(0)}
             </div>
@@ -117,7 +117,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                 value={task.status}
                 aria-label={`Change status for task ${task.title}`}
                 onChange={(e) => onQuickTransition(task, e.target.value as TaskStatus)}
-                className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[10px] bg-[#F7F7F4] border border-[#E5E6E1] rounded px-1 py-0.5 text-[#252824] cursor-pointer"
+                className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[10px] bg-[#F8FAFC] border border-[#E2E8F0] rounded px-1 py-0.5 text-[#1E1B26] cursor-pointer focus:ring-1 focus:ring-[#290660] transition-opacity"
               >
                 <option value="TODO" disabled={task.status !== 'TODO'}>
                   To Do

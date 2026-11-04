@@ -33,36 +33,36 @@ export const RejectionModal: React.FC<RejectionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-      <div className="bg-white border border-[#E5E6E1] rounded-lg shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+      <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-acto-lg max-w-md w-full p-6 animate-pop-in">
         <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-2">
-            <div className="p-2 rounded-lg bg-[#FDF2F2] text-[#C35D5D]">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-lg bg-[#FEF2F2] text-[#DC2626]">
               <AlertCircle className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-[#252824]">Reject Task Review</h3>
-              <p className="text-xs text-[#777B76]">Provide feedback to the employee.</p>
+              <h3 className="text-sm font-bold text-[#1E1B26] font-heading">Reject Task Review</h3>
+              <p className="text-xs text-[#5B616E]">Provide feedback to the employee.</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-[#969A94] hover:text-[#252824] transition-colors"
+            className="text-[#94A3B8] hover:text-[#1E1B26] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="mb-4 p-3 bg-[#F7F7F4] rounded-lg border border-[#E5E6E1]">
-          <div className="text-[11px] font-medium text-[#777B76]">Task Title</div>
-          <div className="text-xs font-semibold text-[#252824] truncate mt-0.5">{task.title}</div>
+        <div className="mb-4 p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
+          <div className="text-[11px] font-semibold text-[#5B616E] font-heading uppercase tracking-wider">Task Title</div>
+          <div className="text-xs font-semibold text-[#1E1B26] truncate mt-0.5">{task.title}</div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-[#252824] mb-1.5">
-              Reason for Rejection <span className="text-[#C35D5D]">*</span>
+            <label className="block text-xs font-semibold text-[#1E1B26] mb-1.5 font-heading">
+              Reason for Rejection <span className="text-[#DC2626]">*</span>
             </label>
             <textarea
               required
@@ -73,10 +73,10 @@ export const RejectionModal: React.FC<RejectionModalProps> = ({
                 if (error) setError(null);
               }}
               placeholder="Explain required changes, failing criteria, or missing documentation..."
-              className="w-full px-3 py-2 bg-white border border-[#E5E6E1] rounded-lg text-xs text-[#252824] placeholder-[#969A94] focus:outline-none focus:ring-1 focus:ring-[#5556A6] focus:border-[#5556A6]"
+              className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#DC2626]/20 focus:border-[#DC2626] transition-all"
             />
-            {error && <p className="text-[11px] text-[#C35D5D] mt-1">{error}</p>}
-            <p className="text-[10px] text-[#969A94] mt-1">
+            {error && <p className="text-[11px] text-[#DC2626] mt-1 font-medium">{error}</p>}
+            <p className="text-[10px] text-[#94A3B8] mt-1 font-sans">
               Minimum 5 characters. This reason will be recorded permanently in the task audit log.
             </p>
           </div>
@@ -86,14 +86,14 @@ export const RejectionModal: React.FC<RejectionModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-3.5 py-2 text-xs font-medium text-[#777B76] hover:text-[#252824] hover:bg-[#F0F0EC] rounded-lg transition-colors"
+              className="px-3.5 py-2 text-xs font-semibold text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting || reason.trim().length < 5}
-              className="px-4 py-2 bg-[#C35D5D] hover:bg-[#A94B4B] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-semibold rounded-lg shadow-sm active:scale-[0.98] transition-all disabled:opacity-50 font-heading"
             >
               {isSubmitting ? 'Rejecting...' : 'Reject & Return to In Progress'}
             </button>

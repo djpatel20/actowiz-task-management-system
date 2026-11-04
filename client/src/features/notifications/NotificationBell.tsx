@@ -65,12 +65,12 @@ export const NotificationBell: React.FC<{ onSelectTask?: (taskId: string) => voi
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-[#777B76] hover:text-[#252824] hover:bg-[#F0F0EC] rounded-lg transition-colors"
+        className="relative p-2 text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors"
         aria-label="View notifications"
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-[#C35D5D] text-white text-[10px] font-bold flex items-center justify-center leading-none">
+          <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-[#FF6B00] text-white text-[10px] font-bold flex items-center justify-center leading-none shadow-acto-orange animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -79,12 +79,12 @@ export const NotificationBell: React.FC<{ onSelectTask?: (taskId: string) => voi
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-[#E5E6E1] rounded-lg shadow-lg z-50 overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#E5E6E1] flex items-center justify-between">
+          <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-[#E2E8F0] rounded-xl shadow-acto-lg z-50 overflow-hidden animate-pop-in">
+            <div className="px-4 py-3 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
               <div className="flex items-center space-x-2">
-                <span className="text-sm font-semibold text-[#252824]">Notifications</span>
+                <span className="text-sm font-bold font-heading text-[#1E1B26]">Notifications</span>
                 {unreadCount > 0 && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#F0F0EC] text-[#777B76]">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#FF6B00]/10 text-[#FF6B00] border border-[#FF6B00]/20">
                     {unreadCount} unread
                   </span>
                 )}
@@ -93,7 +93,7 @@ export const NotificationBell: React.FC<{ onSelectTask?: (taskId: string) => voi
                 <button
                   type="button"
                   onClick={() => markAllReadMutation.mutate()}
-                  className="text-xs text-[#5556A6] hover:text-[#45468F] font-medium flex items-center space-x-1"
+                  className="text-xs text-[#0071CE] hover:text-[#4400CE] font-semibold flex items-center space-x-1 font-heading transition-colors"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
                   <span>Mark all read</span>
@@ -101,9 +101,9 @@ export const NotificationBell: React.FC<{ onSelectTask?: (taskId: string) => voi
               )}
             </div>
 
-            <div className="max-h-80 overflow-y-auto divide-y divide-[#E5E6E1]">
+            <div className="max-h-80 overflow-y-auto divide-y divide-[#E2E8F0]">
               {notifications.length === 0 ? (
-                <div className="p-6 text-center text-xs text-[#969A94]">
+                <div className="p-6 text-center text-xs text-[#94A3B8]">
                   No notifications yet.
                 </div>
               ) : (
@@ -111,23 +111,23 @@ export const NotificationBell: React.FC<{ onSelectTask?: (taskId: string) => voi
                   <div
                     key={n._id}
                     onClick={() => handleNotificationClick(n.link, n._id, n.isRead)}
-                    className={`p-3.5 hover:bg-[#F7F7F4] cursor-pointer transition-colors flex items-start space-x-3 ${
-                      !n.isRead ? 'bg-[#FAF8F5]' : ''
+                    className={`p-3.5 hover:bg-[#F8FAFC] cursor-pointer transition-colors flex items-start space-x-3 ${
+                      !n.isRead ? 'bg-[#F5F2FC]/60' : ''
                     }`}
                   >
                     {!n.isRead ? (
-                      <Circle className="w-2 h-2 text-[#5556A6] fill-[#5556A6] shrink-0 mt-1.5" />
+                      <Circle className="w-2 h-2 text-[#FF6B00] fill-[#FF6B00] shrink-0 mt-1.5" />
                     ) : (
                       <span className="w-2 h-2 shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-[#252824] truncate">
+                      <div className="text-xs font-semibold text-[#1E1B26] truncate font-heading">
                         {n.title}
                       </div>
-                      <div className="text-xs text-[#777B76] mt-0.5 line-clamp-2">
+                      <div className="text-xs text-[#5B616E] mt-0.5 line-clamp-2 font-sans">
                         {n.message}
                       </div>
-                      <div className="text-[10px] text-[#969A94] mt-1">
+                      <div className="text-[10px] text-[#94A3B8] mt-1 font-sans">
                         {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                       </div>
                     </div>

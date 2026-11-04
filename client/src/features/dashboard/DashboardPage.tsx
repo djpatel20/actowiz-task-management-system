@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from './dashboardApi.js';
 import { useAuth } from '../auth/AuthContext.js';
+import actowizLogo from '../../assets/actowiz-logo.png';
 import {
   Clock,
   CheckCircle2,
   AlertTriangle,
-  FolderKanban,
   Kanban,
   ArrowRight,
   TrendingUp,
@@ -24,99 +24,116 @@ export const DashboardPage: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-[#252824]">
-            Welcome back, {user?.name}
-          </h1>
-          <p className="text-xs text-[#777B76] mt-0.5">
-            {user?.role === 'ADMIN'
-              ? 'Company-wide operations, performance metrics, and compliance logs.'
-              : user?.role === 'MANAGER'
-              ? `Managing team projects and review approvals for ${user?.team?.name || 'your team'}.`
-              : 'Your active assignments, reviews, and delivery deadlines.'}
-          </p>
+    <div className="space-y-6 animate-fade-in">
+      {/* Welcome Header with Actowiz Logo */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 sm:p-6 rounded-xl border border-[#E2E8F0] shadow-acto-sm">
+        <div className="flex items-center space-x-4">
+          <div className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] shrink-0">
+            <img
+              src={actowizLogo}
+              alt="Actowiz - Appliance of Data & Insights"
+              className="h-10 w-auto object-contain"
+            />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold font-heading text-[#1E1B26]">
+              Welcome back, {user?.name}
+            </h1>
+            <p className="text-xs text-[#5B616E] mt-1 font-sans">
+              {user?.role === 'ADMIN'
+                ? 'Company-wide operations, performance metrics, and compliance logs.'
+                : user?.role === 'MANAGER'
+                ? `Managing team projects and review approvals for ${user?.team?.name || 'your team'}.`
+                : 'Your active assignments, reviews, and delivery deadlines.'}
+            </p>
+          </div>
         </div>
 
         <button
           type="button"
           onClick={() => navigate('/tasks')}
-          className="inline-flex items-center space-x-2 px-3.5 py-2 bg-[#5556A6] hover:bg-[#45468F] text-white text-xs font-medium rounded-lg transition-colors shrink-0"
+          className="inline-flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all shrink-0 self-start sm:self-center"
         >
-          <Kanban className="w-4 h-4" />
-          <span>Open Kanban Board</span>
+          <Kanban className="w-4 h-4 text-[#FF6B00]" />
+          <span className="font-heading">Open Kanban Board</span>
         </button>
       </div>
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 bg-white border border-[#E5E6E1] rounded-lg shadow-xs">
-          <div className="flex items-center justify-between text-[#777B76] mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Open Tasks</span>
-            <Clock className="w-4 h-4 text-[#547DA6]" />
+        <div className="p-5 bg-white border border-[#E2E8F0] rounded-xl shadow-acto-sm acto-card">
+          <div className="flex items-center justify-between text-[#5B616E] mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider font-heading">Open Tasks</span>
+            <div className="w-8 h-8 rounded-lg bg-[#0071CE]/10 flex items-center justify-center">
+              <Clock className="w-4 h-4 text-[#0071CE]" />
+            </div>
           </div>
-          <div className="text-2xl font-bold text-[#252824]">
+          <div className="text-3xl font-bold font-heading text-[#1E1B26]">
             {isLoading ? '...' : stats?.openTasks ?? 0}
           </div>
-          <div className="text-[11px] text-[#969A94] mt-1">To Do &amp; In Progress</div>
+          <div className="text-[11px] text-[#94A3B8] mt-1 font-sans">To Do &amp; In Progress</div>
         </div>
 
-        <div className="p-4 bg-white border border-[#E5E6E1] rounded-lg shadow-xs">
-          <div className="flex items-center justify-between text-[#777B76] mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">In Review</span>
-            <TrendingUp className="w-4 h-4 text-[#B9843D]" />
+        <div className="p-5 bg-white border border-[#E2E8F0] rounded-xl shadow-acto-sm acto-card">
+          <div className="flex items-center justify-between text-[#5B616E] mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider font-heading">In Review</span>
+            <div className="w-8 h-8 rounded-lg bg-[#FF6B00]/10 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-[#FF6B00]" />
+            </div>
           </div>
-          <div className="text-2xl font-bold text-[#252824]">
+          <div className="text-3xl font-bold font-heading text-[#FF6B00]">
             {isLoading ? '...' : stats?.inReviewTasks ?? 0}
           </div>
-          <div className="text-[11px] text-[#969A94] mt-1">Awaiting review approval</div>
+          <div className="text-[11px] text-[#94A3B8] mt-1 font-sans">Awaiting review approval</div>
         </div>
 
-        <div className="p-4 bg-white border border-[#E5E6E1] rounded-lg shadow-xs">
-          <div className="flex items-center justify-between text-[#777B76] mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Overdue</span>
-            <AlertTriangle className="w-4 h-4 text-[#C35D5D]" />
+        <div className="p-5 bg-white border border-[#E2E8F0] rounded-xl shadow-acto-sm acto-card">
+          <div className="flex items-center justify-between text-[#5B616E] mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider font-heading">Overdue</span>
+            <div className="w-8 h-8 rounded-lg bg-[#EF4444]/10 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4 text-[#EF4444]" />
+            </div>
           </div>
-          <div className="text-2xl font-bold text-[#C35D5D]">
+          <div className="text-3xl font-bold font-heading text-[#EF4444]">
             {isLoading ? '...' : stats?.overdueTasks ?? 0}
           </div>
-          <div className="text-[11px] text-[#969A94] mt-1">Requires immediate attention</div>
+          <div className="text-[11px] text-[#94A3B8] mt-1 font-sans">Requires immediate attention</div>
         </div>
 
-        <div className="p-4 bg-white border border-[#E5E6E1] rounded-lg shadow-xs">
-          <div className="flex items-center justify-between text-[#777B76] mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Completed</span>
-            <CheckCircle2 className="w-4 h-4 text-[#438568]" />
+        <div className="p-5 bg-white border border-[#E2E8F0] rounded-xl shadow-acto-sm acto-card">
+          <div className="flex items-center justify-between text-[#5B616E] mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider font-heading">Completed</span>
+            <div className="w-8 h-8 rounded-lg bg-[#10B981]/10 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4 text-[#10B981]" />
+            </div>
           </div>
-          <div className="text-2xl font-bold text-[#252824]">
+          <div className="text-3xl font-bold font-heading text-[#10B981]">
             {isLoading ? '...' : stats?.completedTasks ?? 0}
           </div>
-          <div className="text-[11px] text-[#969A94] mt-1">Terminal Done tasks</div>
+          <div className="text-[11px] text-[#94A3B8] mt-1 font-sans">Terminal Done tasks</div>
         </div>
       </div>
 
       {/* Recent Tasks List */}
-      <div className="bg-white border border-[#E5E6E1] rounded-lg p-5 shadow-xs">
+      <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-acto-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-sm font-semibold text-[#252824]">Recent Tasks</h2>
-            <p className="text-xs text-[#777B76]">Latest updated work in your scope</p>
+            <h2 className="text-base font-bold font-heading text-[#1E1B26]">Recent Tasks</h2>
+            <p className="text-xs text-[#5B616E]">Latest updated work in your scope</p>
           </div>
           <button
             type="button"
             onClick={() => navigate('/tasks')}
-            className="text-xs font-medium text-[#5556A6] hover:text-[#45468F] flex items-center space-x-1"
+            className="text-xs font-semibold text-[#0071CE] hover:text-[#4400CE] flex items-center space-x-1 font-heading transition-colors"
           >
             <span>View all</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="divide-y divide-[#E5E6E1]">
+        <div className="divide-y divide-[#E2E8F0]">
           {!stats?.recentTasks || stats.recentTasks.length === 0 ? (
-            <div className="py-8 text-center text-xs text-[#969A94]">No recent tasks found.</div>
+            <div className="py-8 text-center text-xs text-[#94A3B8]">No recent tasks found.</div>
           ) : (
             stats.recentTasks.map((t) => {
               const proj = t.projectId as { name?: string };
@@ -125,20 +142,22 @@ export const DashboardPage: React.FC = () => {
                 <div
                   key={t._id}
                   onClick={() => navigate(`/tasks?selected=${t._id}`)}
-                  className="py-3 flex items-center justify-between hover:bg-[#F7F7F4] px-2 rounded-lg cursor-pointer transition-colors"
+                  className="py-3.5 flex items-center justify-between hover:bg-[#F8FAFC] px-3 rounded-lg cursor-pointer transition-colors group"
                 >
                   <div className="min-w-0 pr-4">
-                    <div className="text-xs font-semibold text-[#252824] truncate">{t.title}</div>
-                    <div className="text-[11px] text-[#777B76] mt-0.5">
+                    <div className="text-xs font-semibold text-[#1E1B26] group-hover:text-[#4400CE] transition-colors truncate font-sans">
+                      {t.title}
+                    </div>
+                    <div className="text-[11px] text-[#5B616E] mt-0.5">
                       {proj?.name || 'Project'} &bull; Assigned to {assignee?.name || 'Unassigned'}
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-3 shrink-0">
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded border uppercase text-[#777B76] bg-[#F0F0EC] border-[#E5E6E1]">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase text-[#4400CE] bg-[#4400CE]/10 border-[#4400CE]/20">
                       {t.status.replace('_', ' ')}
                     </span>
-                    <span className="text-[11px] text-[#969A94] hidden sm:inline">
+                    <span className="text-[11px] text-[#94A3B8] hidden sm:inline">
                       {t.dueDate ? format(new Date(t.dueDate), 'MMM d') : ''}
                     </span>
                   </div>

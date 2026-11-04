@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksApi } from './tasksApi.js';
+import { teamsApi } from '../teams/teamsApi.js';
 import { Task, UserRole, TaskStatus } from '../../types/index.js';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
   X,
   Calendar,
-  User as UserIcon,
   CheckCircle2,
-  AlertCircle,
   MessageSquare,
   History,
   Paperclip,
   Download,
   Trash2,
+  AlertTriangle,
   Send,
   Upload,
 } from 'lucide-react';
@@ -31,11 +31,13 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
   onClose,
   userRole,
   currentUserId,
-  onTransition,
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'activity' | 'attachments'>('overview');
   const [newComment, setNewComment] = useState('');
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isReassigning, setIsReassigning] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -45,13 +47,13 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
     enabled: !!taskId,
   });
 
-  const { data: comments = [], isLoading: isCommentsLoading } = useQuery({
+  const { data: comments = [] } = useQuery({
     queryKey: ['task-comments', taskId],
     queryFn: () => tasksApi.listComments(taskId!),
     enabled: !!taskId && activeTab === 'comments',
   });
 
-  const { data: activities = [], isLoading: isActivitiesLoading } = useQuery({
+  const { data: activities = [] } = useQuery({
     queryKey: ['task-activities', taskId],
     queryFn: () => tasksApi.listActivities(taskId!),
     enabled: !!taskId && activeTab === 'activity',
@@ -89,6 +91,34 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
     },
   });
 
+  const deleteTaskMutation = useMutation({
+    mutationFn: () => tasksApi.deleteTask(taskId!),
+    onSuccess: () => {
+      setIsConfirmingDelete(false);
+      onClose();
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message || 'Failed to delete task';
+      setDeleteError(msg);
+    },
+  });
+
+  const reassignMutation = useMutation({
+    mutationFn: (newAssigneeId: string) =>
+      tasksApi.updateTask(taskId!, { assigneeId: newAssigneeId }),
+    onSuccess: () => {
+      setIsReassigning(false);
+      queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-activities', taskId] });
+    },
+  });
+
   if (!taskId) return null;
 
   const handleCommentSubmit = (e: React.FormEvent) => {
@@ -108,47 +138,84 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
     e.target.value = '';
   };
 
-  const project = task?.projectId as { name?: string; client?: string };
-  const assignee = task?.assigneeId as { _id?: string; name?: string; email?: string };
+  const project = task?.projectId as { name?: string; client?: string; managerId?: string | { _id?: string; id?: string } };
+  const assignee = task?.assigneeId as { _id?: string; name?: string; email?: string; role?: string };
+
+  const taskTeamId = task?.teamId
+    ? typeof task.teamId === 'string'
+      ? task.teamId
+      : (task.teamId as { _id?: string })._id
+    : '';
+
+  const { data: teamMembers = [] } = useQuery({
+    queryKey: ['team-members', taskTeamId],
+    queryFn: () => teamsApi.getTeamMembers(taskTeamId!),
+    enabled: !!taskTeamId && isReassigning,
+  });
+
+  const pManagerId = project?.managerId
+    ? typeof project.managerId === 'string'
+      ? project.managerId
+      : (project.managerId._id || project.managerId.id)
+    : null;
+
+  const canManageTask =
+    userRole === 'ADMIN' ||
+    (userRole === 'MANAGER' && (pManagerId ? pManagerId === currentUserId : true));
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-xs" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-xs animate-fade-in" onClick={onClose} />
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-xl bg-white border-l border-[#E5E6E1] shadow-2xl flex flex-col">
+        <div className="w-screen max-w-xl bg-white border-l border-[#E2E8F0] shadow-2xl flex flex-col animate-slide-up">
           {/* Header */}
-          <div className="p-5 border-b border-[#E5E6E1] flex items-start justify-between">
-            <div className="space-y-1 pr-4">
+          <div className="p-5 border-b border-[#E2E8F0] flex items-start justify-between bg-[#F8FAFC]">
+            <div className="space-y-1.5 pr-4">
               <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase text-[#5556A6] bg-[#5556A6]/10 border-[#5556A6]/20">
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase text-[#4400CE] bg-[#4400CE]/10 border-[#4400CE]/20 font-heading">
                   {task?.status?.replace('_', ' ')}
                 </span>
-                <span className="text-xs text-[#777B76]">
+                <span className="text-xs text-[#5B616E]">
                   {project?.name} &bull; {project?.client}
                 </span>
               </div>
-              <h2 className="text-base font-semibold text-[#252824] leading-snug">
+              <h2 className="text-lg font-bold font-heading text-[#1E1B26] leading-snug">
                 {task?.title}
               </h2>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 text-[#969A94] hover:text-[#252824] rounded-lg hover:bg-[#F0F0EC] transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center space-x-1">
+              {canManageTask && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteError(null);
+                    setIsConfirmingDelete(true);
+                  }}
+                  className="p-1.5 text-[#94A3B8] hover:text-[#DC2626] rounded-lg hover:bg-[#FEF2F2] transition-colors"
+                  title="Delete Task"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 text-[#94A3B8] hover:text-[#1E1B26] rounded-lg hover:bg-[#F1F5F9] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex border-b border-[#E5E6E1] px-5 space-x-6 text-xs font-medium">
+          <div className="flex border-b border-[#E2E8F0] px-5 space-x-6 text-xs font-semibold">
             <button
               type="button"
               onClick={() => setActiveTab('overview')}
-              className={`py-3 border-b-2 transition-colors ${
+              className={`py-3 border-b-2 font-heading transition-colors ${
                 activeTab === 'overview'
-                  ? 'border-[#5556A6] text-[#5556A6] font-semibold'
-                  : 'border-transparent text-[#777B76] hover:text-[#252824]'
+                  ? 'border-[#4400CE] text-[#4400CE]'
+                  : 'border-transparent text-[#5B616E] hover:text-[#1E1B26]'
               }`}
             >
               Overview
@@ -156,10 +223,10 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('comments')}
-              className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+              className={`py-3 border-b-2 font-heading transition-colors flex items-center space-x-1.5 ${
                 activeTab === 'comments'
-                  ? 'border-[#5556A6] text-[#5556A6] font-semibold'
-                  : 'border-transparent text-[#777B76] hover:text-[#252824]'
+                  ? 'border-[#4400CE] text-[#4400CE]'
+                  : 'border-transparent text-[#5B616E] hover:text-[#1E1B26]'
               }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
@@ -168,10 +235,10 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('activity')}
-              className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+              className={`py-3 border-b-2 font-heading transition-colors flex items-center space-x-1.5 ${
                 activeTab === 'activity'
-                  ? 'border-[#5556A6] text-[#5556A6] font-semibold'
-                  : 'border-transparent text-[#777B76] hover:text-[#252824]'
+                  ? 'border-[#4400CE] text-[#4400CE]'
+                  : 'border-transparent text-[#5B616E] hover:text-[#1E1B26]'
               }`}
             >
               <History className="w-3.5 h-3.5" />
@@ -180,10 +247,10 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('attachments')}
-              className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+              className={`py-3 border-b-2 font-heading transition-colors flex items-center space-x-1.5 ${
                 activeTab === 'attachments'
-                  ? 'border-[#5556A6] text-[#5556A6] font-semibold'
-                  : 'border-transparent text-[#777B76] hover:text-[#252824]'
+                  ? 'border-[#4400CE] text-[#4400CE]'
+                  : 'border-transparent text-[#5B616E] hover:text-[#1E1B26]'
               }`}
             >
               <Paperclip className="w-3.5 h-3.5" />
@@ -194,54 +261,103 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
           {/* Drawer Body */}
           <div className="flex-1 overflow-y-auto p-5">
             {isTaskLoading ? (
-              <div className="py-20 text-center text-xs text-[#969A94]">Loading task details...</div>
+              <div className="py-20 text-center text-xs text-[#94A3B8]">Loading task details...</div>
             ) : activeTab === 'overview' ? (
               <div className="space-y-6">
                 <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-[#777B76] mb-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#5B616E] mb-2 font-heading">
                     Description
                   </h4>
-                  <div className="p-3.5 bg-[#F7F7F4] rounded-lg border border-[#E5E6E1] text-xs text-[#252824] leading-relaxed whitespace-pre-wrap">
+                  <div className="p-4 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] text-xs text-[#1E1B26] leading-relaxed whitespace-pre-wrap font-sans">
                     {task?.description || 'No description provided.'}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-[#F7F7F4] rounded-lg border border-[#E5E6E1]">
-                    <div className="text-[10px] font-medium text-[#777B76] uppercase">Assignee</div>
-                    <div className="text-xs font-semibold text-[#252824] mt-1 flex items-center space-x-2">
-                      <div className="w-5 h-5 rounded-full bg-[#E5E6E1] flex items-center justify-center font-bold text-[10px]">
-                        {assignee?.name?.charAt(0) || 'U'}
-                      </div>
-                      <span className="truncate">{assignee?.name || 'Unassigned'}</span>
+                  <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
+                    <div className="flex items-center justify-between text-[10px] font-semibold text-[#5B616E] uppercase font-heading">
+                      <span>Assignee</span>
+                      {canManageTask && !isReassigning && (
+                        <button
+                          type="button"
+                          onClick={() => setIsReassigning(true)}
+                          className="text-[#4400CE] hover:underline normal-case font-semibold text-[11px]"
+                        >
+                          Reassign
+                        </button>
+                      )}
                     </div>
+                    {isReassigning ? (
+                      <div className="mt-2 space-y-1.5">
+                        <select
+                          defaultValue={assignee?._id || ''}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              reassignMutation.mutate(e.target.value);
+                            }
+                          }}
+                          className="w-full px-2 py-1 bg-white border border-[#E2E8F0] rounded text-xs text-[#1E1B26] focus:outline-none focus:ring-1 focus:ring-[#4400CE]"
+                        >
+                          <option value="" disabled>Select member</option>
+                          {teamMembers.map((m) => {
+                            const id = m.id || (m as unknown as { _id: string })._id;
+                            return (
+                              <option key={id} value={id}>
+                                {m.name} ({m.role})
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setIsReassigning(false)}
+                          className="text-[10px] text-[#94A3B8] hover:text-[#1E1B26]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-xs font-semibold text-[#1E1B26] mt-1.5 flex items-center justify-between">
+                        <div className="flex items-center space-x-2 truncate">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#4400CE] to-[#290660] text-white flex items-center justify-center font-bold text-[10px] shadow-2xs">
+                            {assignee?.name?.charAt(0) || 'U'}
+                          </div>
+                          <span className="truncate">{assignee?.name || 'Unassigned'}</span>
+                        </div>
+                        {assignee?.role && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase text-[#4400CE] bg-[#4400CE]/10 border-[#4400CE]/20 shrink-0">
+                            {assignee.role}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="p-3 bg-[#F7F7F4] rounded-lg border border-[#E5E6E1]">
-                    <div className="text-[10px] font-medium text-[#777B76] uppercase">Priority</div>
-                    <div className="text-xs font-semibold text-[#252824] mt-1">
+                  <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
+                    <div className="text-[10px] font-semibold text-[#5B616E] uppercase font-heading">Priority</div>
+                    <div className="text-xs font-bold text-[#1E1B26] mt-1.5 font-heading">
                       {task?.priority}
                     </div>
                   </div>
 
-                  <div className="p-3 bg-[#F7F7F4] rounded-lg border border-[#E5E6E1]">
-                    <div className="text-[10px] font-medium text-[#777B76] uppercase">Due Date</div>
-                    <div className="text-xs font-semibold text-[#252824] mt-1 flex items-center space-x-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-[#969A94]" />
+                  <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
+                    <div className="text-[10px] font-semibold text-[#5B616E] uppercase font-heading">Due Date</div>
+                    <div className="text-xs font-semibold text-[#1E1B26] mt-1.5 flex items-center space-x-1.5 font-sans">
+                      <Calendar className="w-3.5 h-3.5 text-[#94A3B8]" />
                       <span>{task?.dueDate ? format(new Date(task.dueDate), 'PPP') : 'N/A'}</span>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-[#F7F7F4] rounded-lg border border-[#E5E6E1]">
-                    <div className="text-[10px] font-medium text-[#777B76] uppercase">OCC Version (__v)</div>
-                    <div className="text-xs font-semibold text-[#252824] mt-1">
+                  <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
+                    <div className="text-[10px] font-semibold text-[#5B616E] uppercase font-heading">OCC Version (__v)</div>
+                    <div className="text-xs font-semibold text-[#1E1B26] mt-1.5 font-sans">
                       v{task?.__v} (Optimistic Concurrency)
                     </div>
                   </div>
                 </div>
 
                 {task?.completedAt && (
-                  <div className="p-3.5 rounded-lg bg-[#EBF5EE] border border-[#D1EADB] text-[#438568] text-xs flex items-center space-x-2">
+                  <div className="p-3.5 rounded-xl bg-[#ECFDF5] border border-[#A7F3D0] text-[#059669] text-xs flex items-center space-x-2 font-medium">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>
                       Completed permanently on {format(new Date(task.completedAt), 'PPP p')}
@@ -253,7 +369,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
               <div className="flex flex-col h-full">
                 <div className="flex-1 space-y-3 overflow-y-auto pr-1 mb-4">
                   {comments.length === 0 ? (
-                    <div className="text-center py-12 text-xs text-[#969A94]">
+                    <div className="text-center py-12 text-xs text-[#94A3B8]">
                       No comments yet. Start the conversation.
                     </div>
                   ) : (
@@ -262,15 +378,15 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                       return (
                         <div
                           key={c._id}
-                          className="p-3 bg-[#F7F7F4] rounded-lg border border-[#E5E6E1] text-xs"
+                          className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] text-xs"
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-semibold text-[#252824]">{author?.name}</span>
-                            <span className="text-[10px] text-[#969A94]">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-bold text-[#1E1B26] font-heading">{author?.name}</span>
+                            <span className="text-[10px] text-[#94A3B8] font-sans">
                               {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
                             </span>
                           </div>
-                          <p className="text-[#252824] leading-relaxed whitespace-pre-wrap">
+                          <p className="text-[#1E1B26] leading-relaxed whitespace-pre-wrap font-sans">
                             {c.content}
                           </p>
                         </div>
@@ -279,21 +395,21 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                   )}
                 </div>
 
-                <form onSubmit={handleCommentSubmit} className="pt-3 border-t border-[#E5E6E1]">
+                <form onSubmit={handleCommentSubmit} className="pt-3 border-t border-[#E2E8F0]">
                   <div className="flex items-center space-x-2">
                     <input
                       type="text"
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
                       placeholder="Add a comment..."
-                      className="flex-1 px-3 py-2 bg-white border border-[#E5E6E1] rounded-lg text-xs text-[#252824] focus:outline-none focus:ring-1 focus:ring-[#5556A6]"
+                      className="flex-1 px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
                     />
                     <button
                       type="submit"
                       disabled={addCommentMutation.isPending || !newComment.trim()}
-                      className="p-2 bg-[#5556A6] text-white rounded-lg hover:bg-[#45468F] transition-colors disabled:opacity-50"
+                      className="p-2 bg-gradient-to-r from-[#4400CE] to-[#290660] text-white rounded-lg hover:from-[#3B00B5] hover:to-[#1F044A] shadow-acto-purple active:scale-[0.98] transition-all disabled:opacity-50"
                     >
-                      <Send className="w-4 h-4" />
+                      <Send className="w-4 h-4 text-[#FF6B00]" />
                     </button>
                   </div>
                 </form>
@@ -301,32 +417,32 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
             ) : activeTab === 'activity' ? (
               <div className="space-y-3">
                 {activities.length === 0 ? (
-                  <div className="text-center py-12 text-xs text-[#969A94]">No activities logged.</div>
+                  <div className="text-center py-12 text-xs text-[#94A3B8]">No activities logged.</div>
                 ) : (
                   activities.map((a) => {
                     const actor = a.actorId as { name?: string; role?: string };
                     return (
                       <div
                         key={a._id}
-                        className="p-3 bg-[#F7F7F4] rounded-lg border border-[#E5E6E1] text-xs space-y-1"
+                        className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] text-xs space-y-1"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold text-[#252824]">{actor?.name}</span>
-                          <span className="text-[10px] text-[#969A94]">
+                          <span className="font-bold text-[#1E1B26] font-heading">{actor?.name}</span>
+                          <span className="text-[10px] text-[#94A3B8] font-sans">
                             {format(new Date(a.createdAt), 'MMM d, h:mm a')}
                           </span>
                         </div>
-                        <div className="text-xs text-[#777B76]">
+                        <div className="text-xs text-[#5B616E]">
                           {a.action === 'STATUS_CHANGED' && (
                             <span>
-                              Changed status from <strong className="text-[#252824]">{a.oldValue}</strong> to{' '}
-                              <strong className="text-[#252824]">{a.newValue}</strong>
+                              Changed status from <strong className="text-[#1E1B26]">{a.oldValue}</strong> to{' '}
+                              <strong className="text-[#4400CE]">{a.newValue}</strong>
                             </span>
                           )}
                           {a.action === 'REVIEW_REJECTED' && (
-                            <div className="text-[#C35D5D]">
-                              Rejected review back to <strong className="text-[#252824]">{a.newValue}</strong>
-                              {a.reason && <p className="mt-1 italic text-[#252824]">"{a.reason}"</p>}
+                            <div className="text-[#DC2626]">
+                              Rejected review back to <strong className="text-[#1E1B26]">{a.newValue}</strong>
+                              {a.reason && <p className="mt-1 italic text-[#1E1B26]">"{a.reason}"</p>}
                             </div>
                           )}
                           {a.action === 'TASK_CREATED' && <span>Created the task.</span>}
@@ -344,13 +460,13 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
             ) : (
               <div className="space-y-4">
                 {/* Upload File Box */}
-                <div className="p-4 border-2 border-dashed border-[#E5E6E1] rounded-lg text-center hover:border-[#5556A6] transition-colors">
+                <div className="p-4 border-2 border-dashed border-[#E2E8F0] rounded-xl text-center hover:border-[#4400CE] hover:bg-[#F8FAFC] transition-all">
                   <label className="cursor-pointer block">
-                    <Upload className="w-6 h-6 text-[#969A94] mx-auto mb-2" />
-                    <span className="text-xs font-semibold text-[#5556A6] hover:underline">
+                    <Upload className="w-6 h-6 text-[#94A3B8] mx-auto mb-2" />
+                    <span className="text-xs font-semibold text-[#0071CE] hover:underline font-heading">
                       Upload attachment
                     </span>
-                    <span className="text-xs text-[#777B76]"> (max 10 MB)</span>
+                    <span className="text-xs text-[#5B616E]"> (max 10 MB)</span>
                     <input
                       type="file"
                       onChange={handleFileUpload}
@@ -358,13 +474,13 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                       accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.zip,.docx,.xlsx,.txt"
                     />
                   </label>
-                  <p className="text-[10px] text-[#969A94] mt-1">
+                  <p className="text-[10px] text-[#94A3B8] mt-1 font-sans">
                     Magic-bytes verified: PDF, PNG, JPEG, ZIP, DOCX
                   </p>
                 </div>
 
                 {uploadError && (
-                  <div className="p-2.5 rounded-lg bg-[#FDF2F2] border border-[#F8D7DA] text-[#C35D5D] text-xs">
+                  <div className="p-2.5 rounded-lg bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-xs">
                     {uploadError}
                   </div>
                 )}
@@ -372,7 +488,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                 {/* Attachments List */}
                 <div className="space-y-2">
                   {!task?.attachments || task.attachments.length === 0 ? (
-                    <div className="text-center py-8 text-xs text-[#969A94]">
+                    <div className="text-center py-8 text-xs text-[#94A3B8]">
                       No attachments uploaded.
                     </div>
                   ) : (
@@ -390,13 +506,13 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                       return (
                         <div
                           key={att.id}
-                          className="p-3 bg-[#F7F7F4] rounded-lg border border-[#E5E6E1] flex items-center justify-between"
+                          className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] flex items-center justify-between"
                         >
                           <div className="min-w-0 pr-2">
-                            <div className="text-xs font-medium text-[#252824] truncate">
+                            <div className="text-xs font-semibold text-[#1E1B26] truncate font-heading">
                               {att.originalName}
                             </div>
-                            <div className="text-[10px] text-[#969A94]">
+                            <div className="text-[10px] text-[#94A3B8]">
                               {(att.size / 1024).toFixed(1)} KB &bull; {att.mimeType}
                             </div>
                           </div>
@@ -406,7 +522,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                               href={`http://localhost:5000${att.url}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="p-1.5 text-[#777B76] hover:text-[#5556A6] rounded hover:bg-[#E5E6E1] transition-colors"
+                              className="p-1.5 text-[#5B616E] hover:text-[#4400CE] rounded hover:bg-[#E2E8F0] transition-colors"
                               title="Download attachment"
                             >
                               <Download className="w-4 h-4" />
@@ -415,7 +531,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                               <button
                                 type="button"
                                 onClick={() => deleteAttachmentMutation.mutate(att.id)}
-                                className="p-1.5 text-[#777B76] hover:text-[#C35D5D] rounded hover:bg-[#E5E6E1] transition-colors"
+                                className="p-1.5 text-[#5B616E] hover:text-[#DC2626] rounded hover:bg-[#E2E8F0] transition-colors"
                                 title="Delete attachment"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -432,6 +548,44 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
           </div>
         </div>
       </div>
+      {/* Delete Task Confirmation Modal */}
+      {isConfirmingDelete && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-acto-lg max-w-sm w-full p-5 animate-pop-in">
+            <div className="flex items-center space-x-2 text-[#DC2626] mb-3">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <h3 className="text-sm font-bold font-heading text-[#1E1B26]">Delete Task</h3>
+            </div>
+            <p className="text-xs text-[#5B616E] leading-relaxed mb-4">
+              Are you sure you want to delete <span className="font-bold text-[#1E1B26]">{task?.title}</span>? 
+              This will remove all associated comments, attachments, and activity history permanently.
+            </p>
+            {deleteError && (
+              <div className="mb-3 p-2 rounded bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-xs">
+                {deleteError}
+              </div>
+            )}
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#E2E8F0]">
+              <button
+                type="button"
+                onClick={() => setIsConfirmingDelete(false)}
+                disabled={deleteTaskMutation.isPending}
+                className="px-3 py-1.5 text-xs font-semibold text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteTaskMutation.mutate()}
+                disabled={deleteTaskMutation.isPending}
+                className="px-3.5 py-1.5 bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-semibold rounded-lg shadow-sm active:scale-[0.98] transition-all disabled:opacity-50 font-heading"
+              >
+                {deleteTaskMutation.isPending ? 'Deleting...' : 'Delete Task'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
