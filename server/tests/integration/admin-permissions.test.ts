@@ -420,4 +420,123 @@ describe('Admin & Manager Scoped Permissions Integration Tests', () => {
       expect(adminInDb?.role).toBe(USER_ROLES.ADMIN);
     });
   });
+
+  describe('6. Multiple Managers in Teams & Multi-Team Membership', () => {
+    it('Admin can add multiple managers and employees to a team, and members can belong to multiple teams', async () => {
+      // 1. Add otherManager (a MANAGER) to the team that already has managerId
+      const addMgrRes = await request(app)
+        .post(`/api/teams/${teamId}/members`)
+        .set('Cookie', [adminCookie])
+        .send({ userId: otherManagerId });
+
+      expect(addMgrRes.status).toBe(200);
+      expect(addMgrRes.body.success).toBe(true);
+
+      // Verify otherManager now has teamId and teamIds
+      const updatedOtherMgr = await User.findById(otherManagerId);
+      expect(updatedOtherMgr?.teamId?.toString()).toBe(teamId);
+      expect(updatedOtherMgr?.teamIds?.map((t) => t.toString())).toContain(teamId);
+
+      // 2. Add employee to the team
+      const addEmpRes = await request(app)
+        .post(`/api/teams/${teamId}/members`)
+        .set('Cookie', [adminCookie])
+        .send({ userId: employeeId });
+
+      expect(addEmpRes.status).toBe(200);
+
+      // 3. List teams and verify multiple managers returned
+      const listRes = await request(app)
+        .get('/api/teams')
+        .set('Cookie', [adminCookie]);
+
+      expect(listRes.status).toBe(200);
+      const teamData = listRes.body.data.find((t: any) => t._id === teamId);
+      expect(teamData).toBeDefined();
+      expect(teamData.managers.length).toBe(2);
+      expect(teamData.managerCount).toBe(2);
+      expect(teamData.employeeCount).toBe(1);
+
+      // 4. Create a second team: Team Beta
+      const createBetaRes = await request(app)
+        .post('/api/teams')
+        .set('Cookie', [adminCookie])
+        .send({ name: 'Team Beta Multi', description: 'Secondary team' });
+      expect(createBetaRes.status).toBe(201);
+      const teamBetaId = createBetaRes.body.data._id;
+
+      // 5. Add the SAME otherManager and employee to Team Beta as well (multi-team presence!)
+      const addMgrBetaRes = await request(app)
+        .post(`/api/teams/${teamBetaId}/members`)
+        .set('Cookie', [adminCookie])
+        .send({ userId: otherManagerId });
+      expect(addMgrBetaRes.status).toBe(200);
+
+      const addEmpBetaRes = await request(app)
+        .post(`/api/teams/${teamBetaId}/members`)
+        .set('Cookie', [adminCookie])
+        .send({ userId: employeeId });
+      expect(addEmpBetaRes.status).toBe(200);
+
+      // Verify otherManager and employee are present in Team Alpha roster
+      const alphaRoster = await request(app)
+        .get(`/api/teams/${teamId}/members`)
+        .set('Cookie', [adminCookie]);
+      expect(alphaRoster.status).toBe(200);
+      const alphaIds = alphaRoster.body.data.map((m: any) => m._id);
+      expect(alphaIds).toContain(otherManagerId);
+      expect(alphaIds).toContain(employeeId);
+
+      // Verify otherManager and employee are ALSO present in Team Beta roster
+      const betaRoster = await request(app)
+        .get(`/api/teams/${teamBetaId}/members`)
+        .set('Cookie', [adminCookie]);
+      expect(betaRoster.status).toBe(200);
+      const betaIds = betaRoster.body.data.map((m: any) => m._id);
+      expect(betaIds).toContain(otherManagerId);
+      expect(betaIds).toContain(employeeId);
+
+      // Verify employee DB record has both team IDs
+      const dbEmp = await User.findById(employeeId);
+      expect(dbEmp?.teamIds?.map((t) => t.toString())).toContain(teamId);
+      expect(dbEmp?.teamIds?.map((t) => t.toString())).toContain(teamBetaId);
+
+      // 6. Remove employee from Team Beta only
+      const removeBetaRes = await request(app)
+        .delete(`/api/teams/${teamBetaId}/members/${employeeId}`)
+        .set('Cookie', [adminCookie]);
+      expect(removeBetaRes.status).toBe(200);
+
+      // Employee is still present in Team Alpha!
+      const alphaRosterAfter = await request(app)
+        .get(`/api/teams/${teamId}/members`)
+        .set('Cookie', [adminCookie]);
+      const alphaIdsAfter = alphaRosterAfter.body.data.map((m: any) => m._id);
+      expect(alphaIdsAfter).toContain(employeeId);
+
+      // Employee is removed from Team Beta
+      const betaRosterAfter = await request(app)
+        .get(`/api/teams/${teamBetaId}/members`)
+        .set('Cookie', [adminCookie]);
+      const betaIdsAfter = betaRosterAfter.body.data.map((m: any) => m._id);
+      expect(betaIdsAfter).not.toContain(employeeId);
+    });
+
+    it('Non-admin cannot add or remove team members (403 Forbidden)', async () => {
+      const addRes = await request(app)
+        .post(`/api/teams/${teamId}/members`)
+        .set('Cookie', [managerCookie])
+        .send({ userId: employeeId });
+
+      expect(addRes.status).toBe(403);
+
+      const deleteRes = await request(app)
+        .delete(`/api/teams/${teamId}/members/${employeeId}`)
+        .set('Cookie', [employeeCookie]);
+
+      expect(deleteRes.status).toBe(403);
+    });
+  });
 });
+
+

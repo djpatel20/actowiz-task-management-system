@@ -141,7 +141,7 @@ describe('P1 & P2 Features Integration Tests (Comments, Dashboard, CSV, Notifica
   });
 
   describe('Dashboard API', () => {
-    it('GET /api/dashboard/stats - returns role-tailored aggregated statistics', async () => {
+    it('GET /api/dashboard/stats - returns role-tailored aggregated statistics and assigned team for manager', async () => {
       const res = await request(app)
         .get('/api/dashboard/stats')
         .set('Cookie', [managerCookie]);
@@ -150,6 +150,21 @@ describe('P1 & P2 Features Integration Tests (Comments, Dashboard, CSV, Notifica
       expect(res.body.success).toBe(true);
       expect(res.body.data.openTasks).toBe(1);
       expect(res.body.data.totalProjects).toBe(1);
+      expect(res.body.data.myTeam).toBeDefined();
+      expect(res.body.data.myTeam.name).toBe('Alpha Team');
+      expect(res.body.data.myTeam.managers.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('GET /api/dashboard/stats - returns assigned team on employee dashboard', async () => {
+      const res = await request(app)
+        .get('/api/dashboard/stats')
+        .set('Cookie', [employeeCookie]);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.myTeam).toBeDefined();
+      expect(res.body.data.myTeam.name).toBe('Alpha Team');
+      expect(res.body.data.myTeam.memberCount).toBeGreaterThanOrEqual(1);
     });
   });
 
