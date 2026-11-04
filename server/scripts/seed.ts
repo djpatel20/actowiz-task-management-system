@@ -49,24 +49,30 @@ export const seedDatabase = async () => {
     isActive: true,
   });
 
-  // 4. Create Teams first (so managers and employees have valid teamIds)
-  const teamAlpha = await Team.create({
-    name: 'Team Alpha',
-    description: 'Engineering & Architecture functional unit',
+  // 4. Create Functional Teams: Developer, UI/UX, and QA & Testing
+  const teamDeveloper = await Team.create({
+    name: 'Developer Team',
+    description: 'Full-stack engineering, microservices, and core platform development',
   });
 
-  const teamBeta = await Team.create({
-    name: 'Team Beta',
-    description: 'Product Design & User Research functional unit',
+  const teamUIUX = await Team.create({
+    name: 'UI/UX Design Team',
+    description: 'User experience research, design system tokens, and interactive prototyping',
   });
 
-  // 5. Create Managers
+  const teamQA = await Team.create({
+    name: 'QA & Testing Team',
+    description: 'Quality assurance, automated end-to-end regression, and security testing',
+  });
+
+  // 5. Create 2 Managers
   const managerAlpha = await User.create({
     name: 'Alex River',
     email: 'manager.alpha@actowiz.com',
     passwordHash: passwordManager,
     role: USER_ROLES.MANAGER,
-    teamId: teamAlpha._id,
+    teamId: teamDeveloper._id,
+    teamIds: [teamDeveloper._id, teamQA._id],
     isActive: true,
   });
 
@@ -75,21 +81,20 @@ export const seedDatabase = async () => {
     email: 'manager.beta@actowiz.com',
     passwordHash: passwordManager,
     role: USER_ROLES.MANAGER,
-    teamId: teamBeta._id,
+    teamId: teamUIUX._id,
+    teamIds: [teamUIUX._id],
     isActive: true,
   });
 
-  // Link managerId on Teams
-  await Team.findByIdAndUpdate(teamAlpha._id, { managerId: managerAlpha._id });
-  await Team.findByIdAndUpdate(teamBeta._id, { managerId: managerBeta._id });
-
-  // 6. Create Employees
+  // 6. Create Bunch of Employees across Developer, UI/UX, and QA Teams
+  // --- Developer Team Employees ---
   const elena = await User.create({
     name: 'Elena Rostova',
     email: 'elena@actowiz.com',
     passwordHash: passwordEmployee,
     role: USER_ROLES.EMPLOYEE,
-    teamId: teamAlpha._id,
+    teamId: teamDeveloper._id,
+    teamIds: [teamDeveloper._id],
     isActive: true,
   });
 
@@ -98,55 +103,182 @@ export const seedDatabase = async () => {
     email: 'david@actowiz.com',
     passwordHash: passwordEmployee,
     role: USER_ROLES.EMPLOYEE,
-    teamId: teamAlpha._id,
+    teamId: teamDeveloper._id,
+    teamIds: [teamDeveloper._id],
     isActive: true,
   });
 
+  const liam = await User.create({
+    name: 'Liam Chen',
+    email: 'liam@actowiz.com',
+    passwordHash: passwordEmployee,
+    role: USER_ROLES.EMPLOYEE,
+    teamId: teamDeveloper._id,
+    teamIds: [teamDeveloper._id],
+    isActive: true,
+  });
+
+  const priya = await User.create({
+    name: 'Priya Sharma',
+    email: 'priya@actowiz.com',
+    passwordHash: passwordEmployee,
+    role: USER_ROLES.EMPLOYEE,
+    teamId: teamDeveloper._id,
+    teamIds: [teamDeveloper._id],
+    isActive: true,
+  });
+
+  // --- UI/UX Design Team Employees ---
   const maya = await User.create({
     name: 'Maya Patel',
     email: 'maya@actowiz.com',
     passwordHash: passwordEmployee,
     role: USER_ROLES.EMPLOYEE,
-    teamId: teamBeta._id,
+    teamId: teamUIUX._id,
+    teamIds: [teamUIUX._id],
     isActive: true,
+  });
+
+  const lucas = await User.create({
+    name: 'Lucas Moreau',
+    email: 'lucas@actowiz.com',
+    passwordHash: passwordEmployee,
+    role: USER_ROLES.EMPLOYEE,
+    teamId: teamUIUX._id,
+    teamIds: [teamUIUX._id],
+    isActive: true,
+  });
+
+  // --- QA & Testing Team Employees ---
+  const sophia = await User.create({
+    name: 'Sophia Bennett',
+    email: 'sophia@actowiz.com',
+    passwordHash: passwordEmployee,
+    role: USER_ROLES.EMPLOYEE,
+    teamId: teamQA._id,
+    teamIds: [teamQA._id],
+    isActive: true,
+  });
+
+  const arjun = await User.create({
+    name: 'Arjun Nair',
+    email: 'arjun@actowiz.com',
+    passwordHash: passwordEmployee,
+    role: USER_ROLES.EMPLOYEE,
+    teamId: teamQA._id,
+    teamIds: [teamQA._id],
+    isActive: true,
+  });
+
+  // 7. Link Managers and Member rosters on Teams
+  await Team.findByIdAndUpdate(teamDeveloper._id, {
+    managerId: managerAlpha._id,
+    managerIds: [managerAlpha._id],
+    memberIds: [elena._id, david._id, liam._id, priya._id],
+  });
+
+  await Team.findByIdAndUpdate(teamUIUX._id, {
+    managerId: managerBeta._id,
+    managerIds: [managerBeta._id],
+    memberIds: [maya._id, lucas._id],
+  });
+
+  await Team.findByIdAndUpdate(teamQA._id, {
+    managerId: managerAlpha._id,
+    managerIds: [managerAlpha._id],
+    memberIds: [sophia._id, arjun._id],
   });
 
   logger.info('Created Users & Teams.');
 
-  // 7. Create Sample Projects
+  // 8. Create Sample Projects
   const now = new Date();
-  const projectAlpha = await Project.create({
+
+  // Developer Team Projects
+  const projectFintech = await Project.create({
     name: 'Fintech Core Banking Migration',
     description: 'Migration of legacy settlement service to event-driven modular architecture.',
     client: 'Apex Financial',
-    startDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+    startDate: new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000),
     endDate: new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000),
-    teamId: teamAlpha._id,
+    teamId: teamDeveloper._id,
+    managerId: managerAlpha._id,
     status: PROJECT_STATUS.ACTIVE,
     createdBy: managerAlpha._id,
   });
 
-  const projectBeta = await Project.create({
+  const projectCustomerPortal = await Project.create({
+    name: 'Customer Portal 2.0 Web Platform',
+    description: 'High-performance customer self-service portal with real-time websocket notifications.',
+    client: 'Global Retail Inc.',
+    startDate: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000),
+    endDate: new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000),
+    teamId: teamDeveloper._id,
+    managerId: managerAlpha._id,
+    status: PROJECT_STATUS.ACTIVE,
+    createdBy: managerAlpha._id,
+  });
+
+  // UI/UX Design Team Projects
+  const projectDesignSystem = await Project.create({
     name: 'Mobile Design System & Brand Refresh',
-    description: 'Unification of mobile UI components and brand guidelines across client platforms.',
+    description: 'Unification of mobile UI components, responsive cards, and design tokens.',
     client: 'Lumina Health',
     startDate: new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000),
-    endDate: new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000),
-    teamId: teamBeta._id,
+    endDate: new Date(now.getTime() + 40 * 24 * 60 * 60 * 1000),
+    teamId: teamUIUX._id,
+    managerId: managerBeta._id,
     status: PROJECT_STATUS.ACTIVE,
     createdBy: managerBeta._id,
   });
 
+  const projectAnalyticsDashboard = await Project.create({
+    name: 'Enterprise Analytics Dashboard Redesign',
+    description: 'Information-dense analytics interface adhering to editorial-minimal design principles.',
+    client: 'Horizon Telemetry',
+    startDate: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000),
+    endDate: new Date(now.getTime() + 50 * 24 * 60 * 60 * 1000),
+    teamId: teamUIUX._id,
+    managerId: managerBeta._id,
+    status: PROJECT_STATUS.ACTIVE,
+    createdBy: managerBeta._id,
+  });
+
+  // QA & Testing Team Projects
+  const projectTestAutomation = await Project.create({
+    name: 'End-to-End Test Automation Framework',
+    description: 'Comprehensive test suite covering authentication, RBAC, and workflow state transitions.',
+    client: 'Apex Financial',
+    startDate: new Date(now.getTime() - 12 * 24 * 60 * 60 * 1000),
+    endDate: new Date(now.getTime() + 35 * 24 * 60 * 60 * 1000),
+    teamId: teamQA._id,
+    managerId: managerAlpha._id,
+    status: PROJECT_STATUS.ACTIVE,
+    createdBy: managerAlpha._id,
+  });
+
+  const projectSecurityAudit = await Project.create({
+    name: 'Security Vulnerability & Penetration Testing',
+    description: 'Multi-vector security verification: magic-bytes verification, CSV formula injection, and IDOR defense.',
+    client: 'SecurePay Gateway',
+    startDate: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000),
+    endDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+    teamId: teamQA._id,
+    managerId: managerAlpha._id,
+    status: PROJECT_STATUS.ACTIVE,
+    createdBy: managerAlpha._id,
+  });
+
   logger.info('Created Projects.');
 
-  // 8. Create Sample Tasks
+  // 9. Create Sample Tasks across all Teams & Projects
   const tasksData = [
-    // Team Alpha Tasks
+    // --- Developer Team Tasks (Fintech Core Banking Migration) ---
     {
       title: 'Implement OAuth 2.0 PKCE Flow',
       description: 'Strengthen client auth exchange with proof key for code exchange verification.',
-      projectId: projectAlpha._id,
-      teamId: teamAlpha._id,
+      projectId: projectFintech._id,
+      teamId: teamDeveloper._id,
       assigneeId: elena._id,
       status: TASK_STATUS.TODO,
       priority: TASK_PRIORITY.HIGH,
@@ -157,8 +289,8 @@ export const seedDatabase = async () => {
     {
       title: 'Optimize MongoDB Aggregation Pipelines',
       description: 'Add compound indices and project stage optimizations for high-throughput queries.',
-      projectId: projectAlpha._id,
-      teamId: teamAlpha._id,
+      projectId: projectFintech._id,
+      teamId: teamDeveloper._id,
       assigneeId: david._id,
       status: TASK_STATUS.IN_PROGRESS,
       priority: TASK_PRIORITY.MEDIUM,
@@ -169,20 +301,20 @@ export const seedDatabase = async () => {
     {
       title: 'Build Resilient Database Retry Interceptors',
       description: 'Handle transient network and replica set failover disconnections automatically.',
-      projectId: projectAlpha._id,
-      teamId: teamAlpha._id,
+      projectId: projectFintech._id,
+      teamId: teamDeveloper._id,
       assigneeId: elena._id,
       status: TASK_STATUS.IN_REVIEW,
       priority: TASK_PRIORITY.URGENT,
-      dueDate: new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000),
+      dueDate: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
       createdBy: managerAlpha._id,
       __v: 2,
     },
     {
       title: 'Setup Initial Docker Multi-Stage Builds',
       description: 'Containerize client and server builds with non-root security principles.',
-      projectId: projectAlpha._id,
-      teamId: teamAlpha._id,
+      projectId: projectFintech._id,
+      teamId: teamDeveloper._id,
       assigneeId: david._id,
       status: TASK_STATUS.DONE,
       priority: TASK_PRIORITY.MEDIUM,
@@ -191,12 +323,39 @@ export const seedDatabase = async () => {
       createdBy: admin._id,
       __v: 3,
     },
-    // Team Beta Tasks
+
+    // --- Developer Team Tasks (Customer Portal 2.0 Web Platform) ---
+    {
+      title: 'Develop Real-Time WebSocket Notification Feed',
+      description: 'Stream instant notifications and update unread notification badge using Socket.IO private rooms.',
+      projectId: projectCustomerPortal._id,
+      teamId: teamDeveloper._id,
+      assigneeId: liam._id,
+      status: TASK_STATUS.IN_PROGRESS,
+      priority: TASK_PRIORITY.HIGH,
+      dueDate: new Date(now.getTime() + 6 * 24 * 60 * 60 * 1000),
+      createdBy: managerAlpha._id,
+      __v: 1,
+    },
+    {
+      title: 'Implement CSV Export with Formula Injection Defense',
+      description: 'Prefix vulnerable spreadsheet trigger characters (=, +, -, @) to neutralize malicious formulas.',
+      projectId: projectCustomerPortal._id,
+      teamId: teamDeveloper._id,
+      assigneeId: priya._id,
+      status: TASK_STATUS.TODO,
+      priority: TASK_PRIORITY.MEDIUM,
+      dueDate: new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000),
+      createdBy: managerAlpha._id,
+      __v: 0,
+    },
+
+    // --- UI/UX Design Team Tasks (Mobile Design System) ---
     {
       title: 'User Persona Research & Accessibility Review',
       description: 'Conduct WCAG 2.1 AA audit on all core customer flows and design tokens.',
-      projectId: projectBeta._id,
-      teamId: teamBeta._id,
+      projectId: projectDesignSystem._id,
+      teamId: teamUIUX._id,
       assigneeId: maya._id,
       status: TASK_STATUS.TODO,
       priority: TASK_PRIORITY.HIGH,
@@ -207,8 +366,8 @@ export const seedDatabase = async () => {
     {
       title: 'High-Fidelity Figma Component Library',
       description: 'Export design tokens and assemble responsive card and drawer molecules.',
-      projectId: projectBeta._id,
-      teamId: teamBeta._id,
+      projectId: projectDesignSystem._id,
+      teamId: teamUIUX._id,
       assigneeId: maya._id,
       status: TASK_STATUS.IN_PROGRESS,
       priority: TASK_PRIORITY.MEDIUM,
@@ -216,11 +375,87 @@ export const seedDatabase = async () => {
       createdBy: managerBeta._id,
       __v: 1,
     },
+    {
+      title: 'Mobile Responsive Navigation Prototype',
+      description: 'Design collapsible sidebar drawer and tactile bottom sheet interactions.',
+      projectId: projectDesignSystem._id,
+      teamId: teamUIUX._id,
+      assigneeId: lucas._id,
+      status: TASK_STATUS.IN_REVIEW,
+      priority: TASK_PRIORITY.MEDIUM,
+      dueDate: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
+      createdBy: managerBeta._id,
+      __v: 2,
+    },
+    {
+      title: 'Brand Refresh Design Token Specifications',
+      description: 'Define semantic color scales, tabular numeral typography, and 4px grid spacing tokens.',
+      projectId: projectDesignSystem._id,
+      teamId: teamUIUX._id,
+      assigneeId: lucas._id,
+      status: TASK_STATUS.DONE,
+      priority: TASK_PRIORITY.LOW,
+      dueDate: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
+      completedAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
+      createdBy: managerBeta._id,
+      __v: 3,
+    },
+
+    // --- QA & Testing Team Tasks (End-to-End Test Automation & Security) ---
+    {
+      title: 'Automate RBAC and Permission Regression Tests',
+      description: 'Supertest automated validation for cross-team isolation and unassigned task IDOR prevention.',
+      projectId: projectTestAutomation._id,
+      teamId: teamQA._id,
+      assigneeId: sophia._id,
+      status: TASK_STATUS.IN_PROGRESS,
+      priority: TASK_PRIORITY.HIGH,
+      dueDate: new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000),
+      createdBy: managerAlpha._id,
+      __v: 1,
+    },
+    {
+      title: 'API Integration Test Coverage for Task Workflows',
+      description: 'Verify strict state transitions (TODO -> IN_PROGRESS -> IN_REVIEW -> DONE) and rejection reason validation.',
+      projectId: projectTestAutomation._id,
+      teamId: teamQA._id,
+      assigneeId: sophia._id,
+      status: TASK_STATUS.TODO,
+      priority: TASK_PRIORITY.MEDIUM,
+      dueDate: new Date(now.getTime() + 6 * 24 * 60 * 60 * 1000),
+      createdBy: managerAlpha._id,
+      __v: 0,
+    },
+    {
+      title: 'Verify Binary Magic-Bytes Attachment Defense',
+      description: 'Test file upload rejection for disguised executables attempting to spoof file extensions.',
+      projectId: projectSecurityAudit._id,
+      teamId: teamQA._id,
+      assigneeId: arjun._id,
+      status: TASK_STATUS.IN_REVIEW,
+      priority: TASK_PRIORITY.URGENT,
+      dueDate: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
+      createdBy: managerAlpha._id,
+      __v: 2,
+    },
+    {
+      title: 'Load Test Optimistic Concurrency Control (OCC)',
+      description: 'Simulate concurrent task updates to verify version key (__v) collision detection and 409 responses.',
+      projectId: projectSecurityAudit._id,
+      teamId: teamQA._id,
+      assigneeId: arjun._id,
+      status: TASK_STATUS.DONE,
+      priority: TASK_PRIORITY.HIGH,
+      dueDate: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000),
+      completedAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
+      createdBy: admin._id,
+      __v: 3,
+    },
   ];
 
   const tasks = await Task.insertMany(tasksData);
 
-  // 9. Create Activities for seeded tasks
+  // 10. Create Activities for seeded tasks
   for (const t of tasks) {
     await Activity.create({
       taskId: t._id,
@@ -266,18 +501,23 @@ export const seedDatabase = async () => {
 
   logger.info('Created Tasks & Activities.');
 
-  console.log('\n======================================================');
+  console.log('\n========================================================================================');
   console.log(' SEEDING COMPLETED SUCCESSFULLY');
-  console.log('======================================================');
-  console.log('| Role     | Name          | Email                      | Password         | Team');
-  console.log('|----------|---------------|----------------------------|------------------|------------');
-  console.log('| Admin    | Sarah Admin   | admin@actowiz.com          | AdminPass123!    | Global');
-  console.log('| Manager  | Alex River    | manager.alpha@actowiz.com  | ManagerPass123!  | Team Alpha');
-  console.log('| Manager  | Marcus Vance  | manager.beta@actowiz.com   | ManagerPass123!  | Team Beta');
-  console.log('| Employee | Elena Rostova | elena@actowiz.com          | EmployeePass123! | Team Alpha');
-  console.log('| Employee | David Kim     | david@actowiz.com          | EmployeePass123! | Team Alpha');
-  console.log('| Employee | Maya Patel    | maya@actowiz.com           | EmployeePass123! | Team Beta');
-  console.log('======================================================\n');
+  console.log('========================================================================================');
+  console.log('| Role     | Name            | Email                      | Password         | Team');
+  console.log('|----------|-----------------|----------------------------|------------------|---------------------');
+  console.log('| Admin    | Sarah Admin     | admin@actowiz.com          | AdminPass123!    | Global System Admin');
+  console.log('| Manager  | Alex River      | manager.alpha@actowiz.com  | ManagerPass123!  | Developer & QA');
+  console.log('| Manager  | Marcus Vance    | manager.beta@actowiz.com   | ManagerPass123!  | UI/UX Design');
+  console.log('| Employee | Elena Rostova   | elena@actowiz.com          | EmployeePass123! | Developer Team');
+  console.log('| Employee | David Kim       | david@actowiz.com          | EmployeePass123! | Developer Team');
+  console.log('| Employee | Liam Chen       | liam@actowiz.com           | EmployeePass123! | Developer Team');
+  console.log('| Employee | Priya Sharma    | priya@actowiz.com          | EmployeePass123! | Developer Team');
+  console.log('| Employee | Maya Patel      | maya@actowiz.com           | EmployeePass123! | UI/UX Design Team');
+  console.log('| Employee | Lucas Moreau    | lucas@actowiz.com          | EmployeePass123! | UI/UX Design Team');
+  console.log('| Employee | Sophia Bennett  | sophia@actowiz.com         | EmployeePass123! | QA & Testing Team');
+  console.log('| Employee | Arjun Nair      | arjun@actowiz.com          | EmployeePass123! | QA & Testing Team');
+  console.log('========================================================================================\n');
 };
 
 const run = async () => {

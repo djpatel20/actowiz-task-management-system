@@ -17,7 +17,7 @@ describe('Seed Script Verification', () => {
     await closeTestDatabase();
   });
 
-  it('seedDatabase creates 1 Admin, 2 Managers, 3 Employees, 2 Teams, Projects, and Tasks with Activities', async () => {
+  it('seedDatabase creates 1 Admin, 2 Managers, 8 Employees, 3 Teams, 6 Projects, and 14 Tasks with Activities', async () => {
     await seedDatabase();
 
     const [users, teams, projects, tasks, activities] = await Promise.all([
@@ -28,11 +28,11 @@ describe('Seed Script Verification', () => {
       Activity.find().lean(),
     ]);
 
-    expect(users.length).toBe(6);
-    expect(teams.length).toBe(2);
-    expect(projects.length).toBe(2);
-    expect(tasks.length).toBe(6);
-    expect(activities.length).toBeGreaterThanOrEqual(6);
+    expect(users.length).toBe(11);
+    expect(teams.length).toBe(3);
+    expect(projects.length).toBe(6);
+    expect(tasks.length).toBe(14);
+    expect(activities.length).toBeGreaterThanOrEqual(14);
 
     const admin = users.find((u) => u.email === 'admin@actowiz.com');
     expect(admin).toBeDefined();
@@ -46,16 +46,35 @@ describe('Seed Script Verification', () => {
     expect(managerBeta).toBeDefined();
     expect(managerBeta?.role).toBe(USER_ROLES.MANAGER);
 
+    // Verify Developer team employees
     const elena = users.find((u) => u.email === 'elena@actowiz.com');
     const david = users.find((u) => u.email === 'david@actowiz.com');
-    const maya = users.find((u) => u.email === 'maya@actowiz.com');
+    const liam = users.find((u) => u.email === 'liam@actowiz.com');
+    const priya = users.find((u) => u.email === 'priya@actowiz.com');
     expect(elena?.role).toBe(USER_ROLES.EMPLOYEE);
     expect(david?.role).toBe(USER_ROLES.EMPLOYEE);
-    expect(maya?.role).toBe(USER_ROLES.EMPLOYEE);
+    expect(liam?.role).toBe(USER_ROLES.EMPLOYEE);
+    expect(priya?.role).toBe(USER_ROLES.EMPLOYEE);
 
-    const teamAlpha = teams.find((t) => t.name === 'Team Alpha');
-    const teamBeta = teams.find((t) => t.name === 'Team Beta');
-    expect(teamAlpha?.managerId?.toString()).toBe(managerAlpha?._id.toString());
-    expect(teamBeta?.managerId?.toString()).toBe(managerBeta?._id.toString());
+    // Verify UI/UX team employees
+    const maya = users.find((u) => u.email === 'maya@actowiz.com');
+    const lucas = users.find((u) => u.email === 'lucas@actowiz.com');
+    expect(maya?.role).toBe(USER_ROLES.EMPLOYEE);
+    expect(lucas?.role).toBe(USER_ROLES.EMPLOYEE);
+
+    // Verify QA team employees
+    const sophia = users.find((u) => u.email === 'sophia@actowiz.com');
+    const arjun = users.find((u) => u.email === 'arjun@actowiz.com');
+    expect(sophia?.role).toBe(USER_ROLES.EMPLOYEE);
+    expect(arjun?.role).toBe(USER_ROLES.EMPLOYEE);
+
+    // Verify teams and managers
+    const teamDeveloper = teams.find((t) => t.name === 'Developer Team');
+    const teamUIUX = teams.find((t) => t.name === 'UI/UX Design Team');
+    const teamQA = teams.find((t) => t.name === 'QA & Testing Team');
+
+    expect(teamDeveloper?.managerId?.toString()).toBe(managerAlpha?._id.toString());
+    expect(teamUIUX?.managerId?.toString()).toBe(managerBeta?._id.toString());
+    expect(teamQA?.managerId?.toString()).toBe(managerAlpha?._id.toString());
   });
 });
