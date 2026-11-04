@@ -5,6 +5,7 @@ import { Team } from '../teams/team.model.js';
 import { User } from '../users/user.model.js';
 import { Activity } from '../activity/activity.model.js';
 import { AuthUserPayload } from '../../shared/types/index.js';
+import { isPastDate } from '../../utils/dateValidator.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError.js';
 import { PROJECT_STATUS, ProjectStatus, TASK_STATUS, USER_ROLES } from '../../config/constants.js';
 
@@ -212,6 +213,13 @@ export class ProjectService {
       }
     }
 
+    if (isPastDate(data.startDate)) {
+      throw new BadRequestError('Start date cannot be in the past');
+    }
+    if (isPastDate(data.endDate)) {
+      throw new BadRequestError('End date cannot be in the past');
+    }
+
     const team = await Team.findById(data.teamId);
     if (!team) {
       throw new BadRequestError('Specified team does not exist');
@@ -280,6 +288,18 @@ export class ProjectService {
     }
 
     if (data.startDate || data.endDate) {
+      if (data.startDate) {
+        const newStart = new Date(data.startDate);
+        if (newStart.getTime() !== project.startDate.getTime() && isPastDate(data.startDate)) {
+          throw new BadRequestError('Start date cannot be in the past');
+        }
+      }
+      if (data.endDate) {
+        const newEnd = new Date(data.endDate);
+        if (newEnd.getTime() !== project.endDate.getTime() && isPastDate(data.endDate)) {
+          throw new BadRequestError('End date cannot be in the past');
+        }
+      }
       const effectiveStart = data.startDate ? new Date(data.startDate) : project.startDate;
       const effectiveEnd = data.endDate ? new Date(data.endDate) : project.endDate;
       if (effectiveEnd < effectiveStart) {

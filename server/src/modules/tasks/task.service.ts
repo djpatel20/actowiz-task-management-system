@@ -11,6 +11,7 @@ import { Activity } from '../activity/activity.model.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import { validateFileBuffer } from '../../utils/fileValidator.js';
+import { isPastDate } from '../../utils/dateValidator.js';
 import { socketEmitter } from '../../socket/socketEmitter.js';
 import { AuthUserPayload } from '../../shared/types/index.js';
 import {
@@ -38,6 +39,7 @@ export class TaskService {
       projectId?: string;
       status?: TaskStatus;
       priority?: TaskPriority;
+      dueDate?: string;
       assigneeId?: string;
       overdue?: boolean;
       search?: string;
@@ -112,6 +114,16 @@ export class TaskService {
     }
     if (query.priority) {
       filter.priority = query.priority;
+    }
+    if (query.dueDate) {
+      const d = new Date(query.dueDate);
+      if (!isNaN(d.getTime())) {
+        const startOfDay = new Date(d);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const endOfDay = new Date(d);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+        filter.dueDate = { $gte: startOfDay, $lte: endOfDay };
+      }
     }
     if (query.overdue) {
       filter.dueDate = { $lt: new Date() };
@@ -215,6 +227,10 @@ export class TaskService {
   ) {
     if (actor.role === USER_ROLES.EMPLOYEE) {
       throw new ForbiddenError('Employees are not authorized to create tasks');
+    }
+
+    if (isPastDate(data.dueDate)) {
+      throw new BadRequestError('Due date cannot be in the past');
     }
 
     const project = await Project.findById(data.projectId);
@@ -374,7 +390,13 @@ export class TaskService {
     if (data.title) task.title = data.title;
     if (data.description !== undefined) task.description = data.description;
     if (data.priority) task.priority = data.priority;
-    if (data.dueDate) task.dueDate = new Date(data.dueDate);
+    if (data.dueDate) {
+      const newDue = new Date(data.dueDate);
+      if (newDue.getTime() !== task.dueDate.getTime() && isPastDate(data.dueDate)) {
+        throw new BadRequestError('Due date cannot be in the past');
+      }
+      task.dueDate = newDue;
+    }
 
     await task.save();
 

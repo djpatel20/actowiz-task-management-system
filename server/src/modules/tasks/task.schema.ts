@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TASK_PRIORITY, TASK_STATUS } from '../../config/constants.js';
+import { isPastDate } from '../../utils/dateValidator.js';
 
 export const createTaskSchema = z.object({
   title: z.string().trim().min(3).max(200),
@@ -8,14 +9,25 @@ export const createTaskSchema = z.object({
   teamId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Team ID'),
   assigneeId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Assignee ID'),
   priority: z.nativeEnum(TASK_PRIORITY).default(TASK_PRIORITY.MEDIUM),
-  dueDate: z.string().datetime({ message: 'Due date must be a valid ISO 8601 datetime' }),
+  dueDate: z
+    .string()
+    .datetime({ message: 'Due date must be a valid ISO 8601 datetime' })
+    .refine((val) => !isPastDate(val), {
+      message: 'Due date cannot be in the past',
+    }),
 });
 
 export const updateTaskSchema = z.object({
   title: z.string().trim().min(3).max(200).optional(),
   description: z.string().trim().max(5000).optional(),
   priority: z.nativeEnum(TASK_PRIORITY).optional(),
-  dueDate: z.string().datetime().optional(),
+  dueDate: z
+    .string()
+    .datetime({ message: 'Due date must be a valid ISO 8601 datetime' })
+    .optional()
+    .refine((val) => !val || !isPastDate(val), {
+      message: 'Due date cannot be in the past',
+    }),
   assigneeId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Assignee ID').optional(),
 });
 
@@ -47,6 +59,7 @@ export const taskQuerySchema = z.object({
   status: z.nativeEnum(TASK_STATUS).optional(),
   priority: z.nativeEnum(TASK_PRIORITY).optional(),
   assigneeId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Assignee ID').optional(),
+  dueDate: z.string().optional(),
   overdue: z
     .string()
     .optional()
