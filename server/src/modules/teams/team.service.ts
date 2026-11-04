@@ -20,10 +20,34 @@ export class TeamService {
     const filter: FilterQuery<ITeamDocument> = {};
 
     if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId) {
+      const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
+      const managedTeams = await Team.find({
+        $or: [
+          { managerId: actor._id },
+          { managerIds: actor._id },
+          { memberIds: actor._id },
+        ],
+      }).select('_id');
+
+      const teamIds: Types.ObjectId[] = managedTeams.map((t) => t._id);
+      if (actor.teamId) {
+        teamIds.push(new Types.ObjectId(actor.teamId));
+      }
+      if (userDoc?.teamId) {
+        teamIds.push(userDoc.teamId);
+      }
+      if (userDoc?.teamIds?.length) {
+        teamIds.push(...userDoc.teamIds);
+      }
+
+      const uniqueTeamIds = Array.from(new Set(teamIds.map((id) => id.toString()))).map(
+        (id) => new Types.ObjectId(id)
+      );
+
+      if (uniqueTeamIds.length === 0) {
         return { teams: [], total: 0, page: 1, limit, totalPages: 0 };
       }
-      filter._id = actor.teamId;
+      filter._id = { $in: uniqueTeamIds };
     }
 
     if (query.search) {
@@ -40,17 +64,45 @@ export class TeamService {
       Team.countDocuments(filter),
     ]);
 
-    // Attach project and employee counts
+    // Attach project, manager, and employee counts
     const teamsWithCounts = await Promise.all(
       teams.map(async (team) => {
-        const [projectCount, memberCount] = await Promise.all([
-          Project.countDocuments({ teamId: team._id }),
-          User.countDocuments({ teamId: team._id, role: USER_ROLES.EMPLOYEE, isActive: true }),
+        const tObjId = team._id;
+        const memberIdList = [
+          ...(team.memberIds || []),
+          ...(team.managerIds || []),
+          ...(team.managerId ? [(team.managerId as { _id?: Types.ObjectId })._id || team.managerId] : []),
+        ];
+
+        const [projectCount, teamUsers] = await Promise.all([
+          Project.countDocuments({ teamId: tObjId }),
+          User.find({
+            $or: [
+              { teamIds: tObjId },
+              { teamId: tObjId },
+              { _id: { $in: memberIdList } },
+            ],
+            isActive: true,
+            role: { $in: [USER_ROLES.EMPLOYEE, USER_ROLES.MANAGER] },
+          })
+            .select('name email role')
+            .lean(),
         ]);
+
+        const uniqueUsersMap = new Map<string, (typeof teamUsers)[0]>();
+        teamUsers.forEach((u) => uniqueUsersMap.set(u._id.toString(), u as (typeof teamUsers)[0]));
+        const allMembers = Array.from(uniqueUsersMap.values());
+
+        const managers = allMembers.filter((u) => u.role === USER_ROLES.MANAGER);
+        const employees = allMembers.filter((u) => u.role === USER_ROLES.EMPLOYEE);
+
         return {
           ...team,
+          managers,
+          managerCount: managers.length,
+          employeeCount: employees.length,
+          memberCount: allMembers.length,
           projectCount,
-          memberCount,
         };
       })
     );
@@ -65,26 +117,62 @@ export class TeamService {
   }
 
   static async getTeamById(teamId: string, actor: AuthUserPayload) {
-    if (actor.role !== USER_ROLES.ADMIN) {
-      if (!actor.teamId || actor.teamId.toString() !== teamId) {
-        throw new NotFoundError('Team not found');
-      }
-    }
-
     const team = await Team.findById(teamId).populate('managerId', 'name email role').lean();
     if (!team) {
       throw new NotFoundError('Team not found');
     }
 
-    const [projectCount, memberCount] = await Promise.all([
-      Project.countDocuments({ teamId: team._id }),
-      User.countDocuments({ teamId: team._id, role: USER_ROLES.EMPLOYEE, isActive: true }),
+    if (actor.role !== USER_ROLES.ADMIN) {
+      const u = await User.findById(actor._id).select('teamId teamIds').lean();
+      const isMember =
+        u?.teamId?.toString() === teamId ||
+        u?.teamIds?.some((t) => t.toString() === teamId) ||
+        team.memberIds?.some((m) => m.toString() === actor._id.toString()) ||
+        team.managerIds?.some((m) => m.toString() === actor._id.toString()) ||
+        team.managerId?.toString() === actor._id.toString() ||
+        (typeof team.managerId === 'object' && (team.managerId as { _id?: Types.ObjectId })?._id?.toString() === actor._id.toString());
+
+      if (!isMember) {
+        throw new NotFoundError('Team not found');
+      }
+    }
+
+    const tObjId = team._id;
+    const memberIdList = [
+      ...(team.memberIds || []),
+      ...(team.managerIds || []),
+      ...(team.managerId ? [(team.managerId as { _id?: Types.ObjectId })._id || team.managerId] : []),
+    ];
+
+    const [projectCount, teamUsers] = await Promise.all([
+      Project.countDocuments({ teamId: tObjId }),
+      User.find({
+        $or: [
+          { teamIds: tObjId },
+          { teamId: tObjId },
+          { _id: { $in: memberIdList } },
+        ],
+        isActive: true,
+        role: { $in: [USER_ROLES.EMPLOYEE, USER_ROLES.MANAGER] },
+      })
+        .select('name email role')
+        .lean(),
     ]);
+
+    const uniqueUsersMap = new Map<string, (typeof teamUsers)[0]>();
+    teamUsers.forEach((u) => uniqueUsersMap.set(u._id.toString(), u as (typeof teamUsers)[0]));
+    const allMembers = Array.from(uniqueUsersMap.values());
+
+    const managers = allMembers.filter((u) => u.role === USER_ROLES.MANAGER);
+    const employees = allMembers.filter((u) => u.role === USER_ROLES.EMPLOYEE);
 
     return {
       ...team,
+      managers,
+      managerCount: managers.length,
+      employeeCount: employees.length,
+      memberCount: allMembers.length,
       projectCount,
-      memberCount,
     };
   }
 
@@ -100,22 +188,22 @@ export class TeamService {
       if (!manager || !manager.isActive || manager.role !== USER_ROLES.MANAGER) {
         throw new BadRequestError('Specified manager must be an active user with MANAGER role');
       }
-
-      const managingTeam = await Team.findOne({ managerId: manager._id });
-      if (managingTeam) {
-        throw new ConflictError('This manager is already assigned to manage another team');
-      }
-      managerObjectId = manager._id;
+      managerObjectId = manager._id as Types.ObjectId;
     }
 
     const team = await Team.create({
       name: data.name,
       description: data.description,
-      managerId: managerObjectId,
+      managerId: managerObjectId || undefined,
+      managerIds: managerObjectId ? [managerObjectId] : [],
+      memberIds: managerObjectId ? [managerObjectId] : [],
     });
 
     if (managerObjectId) {
-      await User.findByIdAndUpdate(managerObjectId, { teamId: team._id });
+      await User.findByIdAndUpdate(managerObjectId, {
+        $addToSet: { teamIds: team._id },
+        $set: { teamId: team._id },
+      });
     }
 
     return team;
@@ -144,31 +232,52 @@ export class TeamService {
 
     if (data.managerId !== undefined) {
       if (data.managerId === null) {
-        // Remove manager
+        // Remove primary manager
         if (team.managerId) {
-          await User.findByIdAndUpdate(team.managerId, { teamId: null });
+          const oldMgrId = team.managerId;
+          team.managerId = undefined;
+          if (team.managerIds) {
+            team.managerIds = team.managerIds.filter((m) => !m.equals(oldMgrId));
+          }
+          if (team.memberIds) {
+            team.memberIds = team.memberIds.filter((m) => !m.equals(oldMgrId));
+          }
+          const userToUpdate = await User.findById(oldMgrId);
+          if (userToUpdate) {
+            if (userToUpdate.teamIds) {
+              userToUpdate.teamIds = userToUpdate.teamIds.filter((t) => !t.equals(team._id));
+            }
+            if (userToUpdate.teamId && userToUpdate.teamId.equals(team._id)) {
+              userToUpdate.teamId = userToUpdate.teamIds && userToUpdate.teamIds.length > 0 ? userToUpdate.teamIds[0] : undefined;
+            }
+            await userToUpdate.save();
+          }
         }
-        team.managerId = undefined;
       } else {
         const newManager = await User.findById(data.managerId);
         if (!newManager || !newManager.isActive || newManager.role !== USER_ROLES.MANAGER) {
           throw new BadRequestError('Specified manager must be an active user with MANAGER role');
         }
 
-        const existingManagedTeam = await Team.findOne({
-          managerId: newManager._id,
-          _id: { $ne: team._id },
-        });
-        if (existingManagedTeam) {
-          throw new ConflictError('This manager is already assigned to manage another team');
+        const newMgrId = newManager._id as Types.ObjectId;
+        team.managerId = newMgrId;
+        if (!team.managerIds) team.managerIds = [];
+        if (!team.managerIds.some((m) => m.equals(newMgrId))) {
+          team.managerIds.push(newMgrId);
+        }
+        if (!team.memberIds) team.memberIds = [];
+        if (!team.memberIds.some((m) => m.equals(newMgrId))) {
+          team.memberIds.push(newMgrId);
         }
 
-        if (team.managerId && team.managerId.toString() !== data.managerId) {
-          await User.findByIdAndUpdate(team.managerId, { teamId: null });
+        if (!newManager.teamIds) newManager.teamIds = [];
+        if (!newManager.teamIds.some((t) => t.equals(team._id))) {
+          newManager.teamIds.push(team._id as Types.ObjectId);
         }
-
-        team.managerId = newManager._id;
-        await User.findByIdAndUpdate(newManager._id, { teamId: team._id });
+        if (!newManager.teamId) {
+          newManager.teamId = team._id as Types.ObjectId;
+        }
+        await newManager.save();
       }
     }
 
@@ -186,8 +295,15 @@ export class TeamService {
       throw new NotFoundError('Team not found');
     }
 
-    // Unassign users who belonged to this team
-    await User.updateMany({ teamId: team._id }, { $unset: { teamId: 1 } });
+    // Unassign this team from any user's teamIds and legacy teamId
+    await User.updateMany(
+      { teamIds: team._id },
+      { $pull: { teamIds: team._id } }
+    );
+    await User.updateMany(
+      { teamId: team._id },
+      { $unset: { teamId: 1 } }
+    );
 
     // Find all projects in this team
     const projects = await Project.find({ teamId: team._id });
@@ -211,32 +327,175 @@ export class TeamService {
   }
 
   static async getTeamMembers(teamId: string, actor: AuthUserPayload) {
-    if (actor.role !== USER_ROLES.ADMIN) {
-      if (!actor.teamId || actor.teamId.toString() !== teamId) {
-        throw new NotFoundError('Team not found');
-      }
-    }
-
     const team = await Team.findById(teamId).lean();
     if (!team) {
       throw new NotFoundError('Team not found');
     }
 
-    const managerFilter = team.managerId ? [{ _id: team.managerId }] : [];
+    if (actor.role !== USER_ROLES.ADMIN) {
+      const u = await User.findById(actor._id).select('teamId teamIds').lean();
+      const isMember =
+        u?.teamId?.toString() === teamId ||
+        u?.teamIds?.some((t) => t.toString() === teamId) ||
+        team.memberIds?.some((m) => m.toString() === actor._id.toString()) ||
+        team.managerIds?.some((m) => m.toString() === actor._id.toString()) ||
+        team.managerId?.toString() === actor._id.toString();
+
+      if (!isMember) {
+        throw new NotFoundError('Team not found');
+      }
+    }
+
+    const tObjId = new Types.ObjectId(teamId);
+    const memberIdList = [
+      ...(team.memberIds || []),
+      ...(team.managerIds || []),
+      ...(team.managerId ? [team.managerId] : []),
+    ];
 
     // Fetch both Employees and Managers who belong to or lead this team
     const members = await User.find({
       $or: [
-        { teamId: new Types.ObjectId(teamId) },
-        ...managerFilter,
+        { teamIds: tObjId },
+        { teamId: tObjId },
+        { _id: { $in: memberIdList } },
       ],
       role: { $in: [USER_ROLES.EMPLOYEE, USER_ROLES.MANAGER] },
       isActive: true,
     })
-      .select('name email role teamId isActive')
+      .select('name email role teamId teamIds isActive')
       .sort({ role: 1, name: 1 })
       .lean();
 
-    return members;
+    const uniqueMembers = new Map<string, (typeof members)[0]>();
+    members.forEach((m) => uniqueMembers.set(m._id.toString(), m));
+    return Array.from(uniqueMembers.values());
+  }
+
+  static async addTeamMember(teamId: string, userId: string, actor: AuthUserPayload) {
+    if (actor.role !== USER_ROLES.ADMIN) {
+      throw new ForbiddenError('Only Admins are permitted to add members to teams');
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team) {
+      throw new NotFoundError('Team not found');
+    }
+
+    const user = await User.findById(userId);
+    if (!user || !user.isActive) {
+      throw new BadRequestError('User not found or is inactive');
+    }
+
+    if (user.role !== USER_ROLES.MANAGER && user.role !== USER_ROLES.EMPLOYEE) {
+      throw new BadRequestError('Only Managers and Employees can be added to a team');
+    }
+
+    const teamObjId = team._id as Types.ObjectId;
+    const userObjId = user._id as Types.ObjectId;
+
+    // Add to user's teamIds without removing them from any other teams
+    if (!user.teamIds) {
+      user.teamIds = [];
+    }
+    if (user.teamId && !user.teamIds.some((t) => t.equals(user.teamId!))) {
+      user.teamIds.push(user.teamId);
+    }
+    if (!user.teamIds.some((t) => t.equals(teamObjId))) {
+      user.teamIds.push(teamObjId);
+    }
+    // Set active/primary teamId
+    user.teamId = teamObjId;
+    await user.save();
+
+    // Add to team's memberIds
+    if (!team.memberIds) {
+      team.memberIds = [];
+    }
+    if (!team.memberIds.some((m) => m.equals(userObjId))) {
+      team.memberIds.push(userObjId);
+    }
+
+    // If user is a MANAGER, also add to team.managerIds and team.managerId if unset
+    if (user.role === USER_ROLES.MANAGER) {
+      if (!team.managerIds) {
+        team.managerIds = [];
+      }
+      if (!team.managerIds.some((m) => m.equals(userObjId))) {
+        team.managerIds.push(userObjId);
+      }
+      if (!team.managerId) {
+        team.managerId = userObjId;
+      }
+    }
+    await team.save();
+
+    return {
+      success: true,
+      message: `${user.role === USER_ROLES.MANAGER ? 'Manager' : 'Employee'} added to team successfully`,
+      member: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        teamId: user.teamId,
+      },
+    };
+  }
+
+  static async removeTeamMember(teamId: string, userId: string, actor: AuthUserPayload) {
+    if (actor.role !== USER_ROLES.ADMIN) {
+      throw new ForbiddenError('Only Admins are permitted to remove members from teams');
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team) {
+      throw new NotFoundError('Team not found');
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    const teamObjId = team._id as Types.ObjectId;
+    const userObjId = user._id as Types.ObjectId;
+
+    const isMember =
+      user.teamId?.equals(teamObjId) ||
+      user.teamIds?.some((t) => t.equals(teamObjId)) ||
+      team.memberIds?.some((m) => m.equals(userObjId)) ||
+      team.managerIds?.some((m) => m.equals(userObjId)) ||
+      team.managerId?.equals(userObjId);
+
+    if (!isMember) {
+      throw new BadRequestError('User is not a member of this team');
+    }
+
+    // Remove team from user.teamIds without affecting their membership in other teams!
+    if (user.teamIds) {
+      user.teamIds = user.teamIds.filter((t) => !t.equals(teamObjId));
+    }
+    if (user.teamId && user.teamId.equals(teamObjId)) {
+      user.teamId = user.teamIds && user.teamIds.length > 0 ? user.teamIds[0] : undefined;
+    }
+    await user.save();
+
+    // Remove user from team.memberIds and team.managerIds
+    if (team.memberIds) {
+      team.memberIds = team.memberIds.filter((m) => !m.equals(userObjId));
+    }
+    if (team.managerIds) {
+      team.managerIds = team.managerIds.filter((m) => !m.equals(userObjId));
+    }
+    if (team.managerId && team.managerId.equals(userObjId)) {
+      team.managerId = team.managerIds && team.managerIds.length > 0 ? team.managerIds[0] : undefined;
+    }
+    await team.save();
+
+    return {
+      success: true,
+      message: 'Member removed from team successfully',
+    };
   }
 }

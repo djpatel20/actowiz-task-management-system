@@ -80,4 +80,28 @@ export class TeamController {
       next(error);
     }
   }
+
+  static async addTeamMember(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await TeamService.addTeamMember(req.params.id, req.body.userId, req.user!);
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async removeTeamMember(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await TeamService.removeTeamMember(req.params.id, req.params.userId, req.user!);
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

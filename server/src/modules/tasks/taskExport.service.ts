@@ -2,6 +2,8 @@ import { Response } from 'express';
 import { FilterQuery, Types } from 'mongoose';
 import { stringify } from 'csv-stringify';
 import { Task, ITaskDocument } from './task.model.js';
+import { Project } from '../projects/project.model.js';
+import { Team } from '../teams/team.model.js';
 import { AuthUserPayload } from '../../shared/types/index.js';
 import { sanitizeCsvCell } from '../../utils/csvSanitizer.js';
 import { TASK_STATUS, TaskPriority, TaskStatus, USER_ROLES } from '../../config/constants.js';
@@ -26,7 +28,23 @@ export class TaskExportService {
     if (actor.role === USER_ROLES.EMPLOYEE) {
       filter.assigneeId = actor._id;
     } else if (actor.role === USER_ROLES.MANAGER) {
-      filter.teamId = actor.teamId || new Types.ObjectId();
+      const managedTeams = await Team.find({ managerId: actor._id }).select('_id');
+      const teamIds = managedTeams.map((t) => t._id);
+      if (actor.teamId) {
+        teamIds.push(new Types.ObjectId(actor.teamId));
+      }
+
+      const managedProjects = await Project.find({
+        $or: [
+          { managerId: actor._id },
+          { teamId: { $in: teamIds }, managerId: { $exists: false } },
+          { teamId: { $in: teamIds }, managerId: null },
+        ],
+      }).select('_id');
+
+      const managedProjectIds = managedProjects.map((p) => p._id);
+      filter.projectId = { $in: managedProjectIds };
+
       if (query.assigneeId) {
         filter.assigneeId = new Types.ObjectId(query.assigneeId);
       }

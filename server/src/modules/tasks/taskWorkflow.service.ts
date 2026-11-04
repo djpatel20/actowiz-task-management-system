@@ -1,6 +1,8 @@
 import mongoose, { Types } from 'mongoose';
 import { Task, ITaskDocument } from './task.model.js';
 import { Project } from '../projects/project.model.js';
+import { Team } from '../teams/team.model.js';
+import { User } from '../users/user.model.js';
 import { Activity } from '../activity/activity.model.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import { socketEmitter } from '../../socket/socketEmitter.js';
@@ -76,15 +78,23 @@ export class TaskWorkflowService {
         );
       }
     } else if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
-        throw new NotFoundError('Task not found');
-      }
+      const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
+      const isActorInTeam =
+        (actor.teamId && task.teamId.toString() === actor.teamId.toString()) ||
+        (userDoc?.teamId && task.teamId.toString() === userDoc.teamId.toString()) ||
+        (userDoc?.teamIds && userDoc.teamIds.some((t: Types.ObjectId) => t.toString() === task.teamId.toString()));
 
       const isProjectManager =
         project.managerId?.toString() === actor._id.toString() ||
-        (!project.managerId && task.teamId.toString() === actor.teamId.toString());
+        (!project.managerId && (
+          isActorInTeam ||
+          Boolean(await Team.exists({
+            _id: task.teamId,
+            $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
+          }))
+        ));
 
-      if (!isProjectManager || (project.managerId && project.managerId.toString() !== actor._id.toString())) {
+      if (!isProjectManager) {
         throw new ForbiddenError('Managers can only review and transition tasks in projects where they are assigned as manager');
       }
     }

@@ -4,7 +4,7 @@ import { authenticate } from '../../middleware/auth.middleware.js';
 import { requireActiveUser } from '../../middleware/activeUser.middleware.js';
 import { requireRole } from '../../middleware/rbac.middleware.js';
 import { validateRequest } from '../../middleware/validate.js';
-import { createTeamSchema, updateTeamSchema, teamQuerySchema } from './team.schema.js';
+import { createTeamSchema, updateTeamSchema, teamQuerySchema, addTeamMemberSchema } from './team.schema.js';
 import { USER_ROLES } from '../../config/constants.js';
 
 const router = Router();
@@ -41,5 +41,18 @@ router.delete(
 );
 
 router.get('/:id/members', TeamController.getTeamMembers);
+
+router.post(
+  '/:id/members',
+  requireRole(USER_ROLES.ADMIN),
+  validateRequest({ body: addTeamMemberSchema }),
+  TeamController.addTeamMember
+);
+
+router.delete(
+  '/:id/members/:userId',
+  requireRole(USER_ROLES.ADMIN),
+  TeamController.removeTeamMember
+);
 
 export default router;

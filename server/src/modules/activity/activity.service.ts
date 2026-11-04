@@ -1,6 +1,8 @@
 import { ClientSession, Types } from 'mongoose';
 import { Activity, IActivityDocument } from './activity.model.js';
 import { Task } from '../tasks/task.model.js';
+import { Team } from '../teams/team.model.js';
+import { User } from '../users/user.model.js';
 import { AuthUserPayload } from '../../shared/types/index.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 import { ActivityAction, USER_ROLES } from '../../config/constants.js';
@@ -43,7 +45,22 @@ export class ActivityService {
     }
 
     if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
+      const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
+      const isActorInTeam =
+        (actor.teamId && task.teamId.toString() === actor.teamId.toString()) ||
+        (userDoc?.teamId && task.teamId.toString() === userDoc.teamId.toString()) ||
+        (userDoc?.teamIds && userDoc.teamIds.some((t: Types.ObjectId) => t.toString() === task.teamId.toString()));
+
+      const hasAccess =
+        isActorInTeam ||
+        Boolean(
+          await Team.exists({
+            _id: task.teamId,
+            $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
+          })
+        );
+
+      if (!hasAccess) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {

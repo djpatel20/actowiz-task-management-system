@@ -108,6 +108,8 @@ export class AuthController {
       let team = null;
       if (user.teamId) {
         team = await Team.findById(user.teamId).lean();
+      } else if (user.role === 'MANAGER') {
+        team = await Team.findOne({ managerId: user._id }).lean();
       }
 
       res.status(200).json({
@@ -118,10 +120,11 @@ export class AuthController {
             name: user.name,
             email: user.email,
             role: user.role,
-            teamId: user.teamId,
+            teamId: user.teamId || (team ? team._id : undefined),
             team: team
               ? {
                   id: team._id,
+                  _id: team._id,
                   name: team.name,
                   description: team.description,
                 }

@@ -60,10 +60,36 @@ export class ProjectService {
         filter.teamId = new Types.ObjectId(query.teamId);
       }
     } else if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId) {
-        return { projects: [], total: 0, page: 1, limit, totalPages: 0 };
+      const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
+      const managedTeams = await Team.find({
+        $or: [
+          { managerId: actor._id },
+          { managerIds: actor._id },
+          { memberIds: actor._id },
+        ],
+      }).select('_id');
+      const teamIds: Types.ObjectId[] = managedTeams.map((t) => t._id);
+      if (actor.teamId) {
+        teamIds.push(new Types.ObjectId(actor.teamId));
       }
-      filter.teamId = actor.teamId;
+      if (userDoc?.teamId) {
+        teamIds.push(userDoc.teamId);
+      }
+      if (userDoc?.teamIds?.length) {
+        teamIds.push(...userDoc.teamIds);
+      }
+
+      const managerConditions: Array<Record<string, unknown>> = [
+        { managerId: actor._id },
+        { teamId: { $in: teamIds } },
+      ];
+
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: managerConditions }];
+        delete filter.$or;
+      } else {
+        filter.$or = managerConditions;
+      }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
       // Find projects where this employee has assigned tasks
       const projectIds = await Task.distinct('projectId', { assigneeId: actor._id });
@@ -118,7 +144,25 @@ export class ProjectService {
     // Authorization check
     if (actor.role === USER_ROLES.MANAGER) {
       const pTeamId = (project.teamId as { _id?: Types.ObjectId } | null)?._id || project.teamId;
-      if (!actor.teamId || !pTeamId || pTeamId.toString() !== actor.teamId.toString()) {
+      const isProjectManager =
+        project.managerId &&
+        ((project.managerId as { _id?: Types.ObjectId })._id || project.managerId).toString() ===
+          actor._id.toString();
+
+      const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
+      const isActorInTeam =
+        (actor.teamId && pTeamId && pTeamId.toString() === actor.teamId.toString()) ||
+        (userDoc?.teamId && pTeamId && pTeamId.toString() === userDoc.teamId.toString()) ||
+        (userDoc?.teamIds && pTeamId && userDoc.teamIds.some((t: Types.ObjectId) => t.toString() === pTeamId.toString()));
+
+      const isTeamManager =
+        isActorInTeam ||
+        Boolean(await Team.exists({
+          _id: pTeamId,
+          $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
+        }));
+
+      if (!isProjectManager && !isTeamManager) {
         throw new NotFoundError('Project not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
@@ -152,7 +196,18 @@ export class ProjectService {
     actor: AuthUserPayload
   ) {
     if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || actor.teamId.toString() !== data.teamId) {
+      const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
+      const isActorInTeam =
+        (actor.teamId && actor.teamId.toString() === data.teamId) ||
+        (userDoc?.teamId && userDoc.teamId.toString() === data.teamId) ||
+        (userDoc?.teamIds && userDoc.teamIds.some((t: Types.ObjectId) => t.toString() === data.teamId)) ||
+        Boolean(
+          await Team.exists({
+            _id: data.teamId,
+            $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
+          })
+        );
+      if (!isActorInTeam) {
         throw new ForbiddenError('Managers can only create projects for their own team');
       }
     }
@@ -208,7 +263,18 @@ export class ProjectService {
     }
 
     if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || project.teamId.toString() !== actor.teamId.toString()) {
+      const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
+      const isActorInTeam =
+        (actor.teamId && project.teamId.toString() === actor.teamId.toString()) ||
+        (userDoc?.teamId && project.teamId.toString() === userDoc.teamId.toString()) ||
+        (userDoc?.teamIds && userDoc.teamIds.some((t: Types.ObjectId) => t.toString() === project.teamId.toString())) ||
+        Boolean(
+          await Team.exists({
+            _id: project.teamId,
+            $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
+          })
+        );
+      if (!isActorInTeam) {
         throw new NotFoundError('Project not found');
       }
     }

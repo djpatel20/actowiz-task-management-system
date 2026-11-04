@@ -55,16 +55,31 @@ export class TaskService {
     if (actor.role === USER_ROLES.EMPLOYEE) {
       filter.assigneeId = actor._id;
     } else if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId) {
-        return { tasks: [], total: 0, page: 1, limit, totalPages: 0 };
+      const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
+      const managedTeams = await Team.find({
+        $or: [
+          { managerId: actor._id },
+          { managerIds: actor._id },
+          { memberIds: actor._id },
+        ],
+      }).select('_id');
+      const teamIds: Types.ObjectId[] = managedTeams.map((t) => t._id);
+      if (actor.teamId) {
+        teamIds.push(new Types.ObjectId(actor.teamId));
+      }
+      if (userDoc?.teamId) {
+        teamIds.push(userDoc.teamId);
+      }
+      if (userDoc?.teamIds?.length) {
+        teamIds.push(...userDoc.teamIds);
       }
 
       // Filter only tasks from projects where this manager is added as manager
       const managedProjects = await Project.find({
         $or: [
           { managerId: actor._id },
-          { teamId: actor.teamId, managerId: { $exists: false } },
-          { teamId: actor.teamId, managerId: null },
+          { teamId: { $in: teamIds }, managerId: { $exists: false } },
+          { teamId: { $in: teamIds }, managerId: null },
         ],
       }).select('_id');
 
@@ -149,16 +164,15 @@ export class TaskService {
     // RBAC IDOR check
     if (actor.role === USER_ROLES.MANAGER) {
       const pTeamId = (task.teamId as { _id?: Types.ObjectId } | null)?._id || task.teamId;
-      if (!actor.teamId || pTeamId.toString() !== actor.teamId.toString()) {
-        throw new NotFoundError('Task not found');
-      }
-
       const pObj = task.projectId as { managerId?: Types.ObjectId | string } | null;
       const isProjectManager =
         (pObj?.managerId && pObj.managerId.toString() === actor._id.toString()) ||
-        (!pObj?.managerId && pTeamId.toString() === actor.teamId.toString());
+        (!pObj?.managerId && (
+          (actor.teamId && pTeamId.toString() === actor.teamId.toString()) ||
+          Boolean(await Team.exists({ _id: pTeamId, managerId: actor._id }))
+        ));
 
-      if (!isProjectManager || (pObj?.managerId && pObj.managerId.toString() !== actor._id.toString())) {
+      if (!isProjectManager) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
@@ -201,15 +215,14 @@ export class TaskService {
     }
 
     if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || actor.teamId.toString() !== data.teamId) {
-        throw new ForbiddenError('Managers can only create tasks for their own team');
-      }
-
       const isProjectManager =
         project.managerId?.toString() === actor._id.toString() ||
-        (!project.managerId && actor.teamId.toString() === data.teamId);
+        (!project.managerId && (
+          (actor.teamId && actor.teamId.toString() === data.teamId) ||
+          Boolean(await Team.exists({ _id: data.teamId, managerId: actor._id }))
+        ));
 
-      if (!isProjectManager || (project.managerId && project.managerId.toString() !== actor._id.toString())) {
+      if (!isProjectManager) {
         throw new ForbiddenError('Managers can only create tasks in projects where they are assigned as manager');
       }
     }
@@ -226,6 +239,9 @@ export class TaskService {
     const team = await Team.findById(data.teamId);
     const isMemberOfTeam =
       (assignee.teamId && assignee.teamId.toString() === data.teamId) ||
+      (assignee.teamIds && assignee.teamIds.some((t: Types.ObjectId) => t.toString() === data.teamId)) ||
+      (team?.memberIds && team.memberIds.some((m: Types.ObjectId) => m.toString() === assignee._id.toString())) ||
+      (team?.managerIds && team.managerIds.some((m: Types.ObjectId) => m.toString() === assignee._id.toString())) ||
       (team?.managerId && team.managerId.toString() === assignee._id.toString());
 
     if (!isMemberOfTeam) {
@@ -297,15 +313,14 @@ export class TaskService {
     }
 
     if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
-        throw new NotFoundError('Task not found');
-      }
-
       const isProjectManager =
         project.managerId?.toString() === actor._id.toString() ||
-        (!project.managerId && task.teamId.toString() === actor.teamId.toString());
+        (!project.managerId && (
+          (actor.teamId && task.teamId.toString() === actor.teamId.toString()) ||
+          Boolean(await Team.exists({ _id: task.teamId, managerId: actor._id }))
+        ));
 
-      if (!isProjectManager || (project.managerId && project.managerId.toString() !== actor._id.toString())) {
+      if (!isProjectManager) {
         throw new ForbiddenError('Managers can only manage and assign tasks in projects where they are assigned as manager');
       }
     }
@@ -326,6 +341,9 @@ export class TaskService {
       const taskTeam = await Team.findById(task.teamId);
       const isMemberOfTeam =
         (newAssignee.teamId && newAssignee.teamId.toString() === task.teamId.toString()) ||
+        (newAssignee.teamIds && newAssignee.teamIds.some((t: Types.ObjectId) => t.toString() === task.teamId.toString())) ||
+        (taskTeam?.memberIds && taskTeam.memberIds.some((m: Types.ObjectId) => m.toString() === newAssignee._id.toString())) ||
+        (taskTeam?.managerIds && taskTeam.managerIds.some((m: Types.ObjectId) => m.toString() === newAssignee._id.toString())) ||
         (taskTeam?.managerId && taskTeam.managerId.toString() === newAssignee._id.toString());
 
       if (!isMemberOfTeam) {
@@ -397,15 +415,14 @@ export class TaskService {
     }
 
     if (actor.role === USER_ROLES.MANAGER) {
-      if (!actor.teamId || task.teamId.toString() !== actor.teamId.toString()) {
-        throw new NotFoundError('Task not found');
-      }
-
       const isProjectManager =
         project.managerId?.toString() === actor._id.toString() ||
-        (!project.managerId && task.teamId.toString() === actor.teamId.toString());
+        (!project.managerId && (
+          (actor.teamId && task.teamId.toString() === actor.teamId.toString()) ||
+          Boolean(await Team.exists({ _id: task.teamId, managerId: actor._id }))
+        ));
 
-      if (!isProjectManager || (project.managerId && project.managerId.toString() !== actor._id.toString())) {
+      if (!isProjectManager) {
         throw new ForbiddenError('Managers can only delete tasks in projects where they are assigned as manager');
       }
     }
