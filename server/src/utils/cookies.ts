@@ -3,22 +3,22 @@ import { env } from '../config/env.js';
 import { COOKIE_NAMES } from '../config/constants.js';
 
 export const getAccessTokenCookieOptions = (): CookieOptions => {
-  const isProd = env.NODE_ENV === 'production';
+  const isHttps = env.CLIENT_URL.startsWith('https://');
   return {
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
     maxAge: 15 * 60 * 1000, // 15 minutes
     path: '/',
   };
 };
 
 export const getRefreshTokenCookieOptions = (): CookieOptions => {
-  const isProd = env.NODE_ENV === 'production';
+  const isHttps = env.CLIENT_URL.startsWith('https://');
   return {
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
   };
@@ -30,17 +30,17 @@ export const setAuthCookies = (res: Response, accessToken: string, refreshToken:
 };
 
 export const clearAuthCookies = (res: Response) => {
-  const isProd = env.NODE_ENV === 'production';
+  const isHttps = env.CLIENT_URL.startsWith('https://');
   res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, {
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
     path: '/',
   });
   res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, {
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
     path: '/',
   });
 };
