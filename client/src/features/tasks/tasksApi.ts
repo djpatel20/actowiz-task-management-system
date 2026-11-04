@@ -8,6 +8,7 @@ export interface TaskQueryParams {
   status?: TaskStatus;
   priority?: TaskPriority;
   assigneeId?: string;
+  dueDate?: string;
   overdue?: boolean;
   search?: string;
   sortBy?: string;

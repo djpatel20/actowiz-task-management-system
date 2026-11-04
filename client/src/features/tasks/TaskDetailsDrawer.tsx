@@ -156,6 +156,18 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
     },
   });
 
+  const taskTeamId = task?.teamId
+    ? typeof task.teamId === 'string'
+      ? task.teamId
+      : (task.teamId as { _id?: string })._id
+    : '';
+
+  const { data: teamMembers = [] } = useQuery({
+    queryKey: ['team-members', taskTeamId],
+    queryFn: () => teamsApi.getTeamMembers(taskTeamId!),
+    enabled: !!taskId && !!taskTeamId && isReassigning,
+  });
+
   if (!taskId) return null;
 
   const handleCommentSubmit = (e: React.FormEvent) => {
@@ -177,18 +189,8 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
 
   const project = task?.projectId as { name?: string; client?: string; managerId?: string | { _id?: string; id?: string } };
   const assignee = task?.assigneeId as { _id?: string; name?: string; email?: string; role?: string };
+  const creator = task?.createdBy as { _id?: string; name?: string; email?: string } | undefined;
 
-  const taskTeamId = task?.teamId
-    ? typeof task.teamId === 'string'
-      ? task.teamId
-      : (task.teamId as { _id?: string })._id
-    : '';
-
-  const { data: teamMembers = [] } = useQuery({
-    queryKey: ['team-members', taskTeamId],
-    queryFn: () => teamsApi.getTeamMembers(taskTeamId!),
-    enabled: !!taskTeamId && isReassigning,
-  });
 
   const pManagerId = project?.managerId
     ? typeof project.managerId === 'string'
@@ -416,9 +418,10 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                   </div>
 
                   <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
-                    <div className="text-[10px] font-semibold text-[#5B616E] uppercase font-heading">OCC Version (__v)</div>
-                    <div className="text-xs font-semibold text-[#1E1B26] mt-1.5 font-sans">
-                      v{task?.__v ?? 0} (Optimistic Concurrency)
+                    <div className="text-[10px] font-semibold text-[#5B616E] uppercase font-heading">Created By</div>
+                    <div className="text-xs font-semibold text-[#1E1B26] mt-1.5 flex items-center justify-between font-sans">
+                      <span className="truncate">{creator?.name || 'System'}</span>
+                      <span className="text-[10px] text-[#94A3B8] font-normal" title="Optimistic Concurrency Version">v{task?.__v ?? 0}</span>
                     </div>
                   </div>
                 </div>

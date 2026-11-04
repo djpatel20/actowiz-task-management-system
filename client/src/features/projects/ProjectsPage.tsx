@@ -32,10 +32,14 @@ export const ProjectsPage: React.FC = () => {
   const [editClient, setEditClient] = useState('');
   const [editStartDate, setEditStartDate] = useState('');
   const [editEndDate, setEditEndDate] = useState('');
+  const [initialStartDate, setInitialStartDate] = useState('');
+  const [initialEndDate, setInitialEndDate] = useState('');
   const [editTeamId, setEditTeamId] = useState('');
   const [editManagerId, setEditManagerId] = useState('');
   const [editStatus, setEditStatus] = useState<ProjectStatus>('ACTIVE');
   const [editError, setEditError] = useState<string | null>(null);
+
+  const todayString = format(new Date(), 'yyyy-MM-dd');
 
   const { data, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -138,6 +142,14 @@ export const ProjectsPage: React.FC = () => {
       setError('Please fill in all required fields');
       return;
     }
+    if (startDate < todayString) {
+      setError('Start date cannot be in the past');
+      return;
+    }
+    if (endDate < todayString) {
+      setError('End date cannot be in the past');
+      return;
+    }
     if (new Date(endDate) < new Date(startDate)) {
       setError('End date must be greater than or equal to start date');
       return;
@@ -158,8 +170,12 @@ export const ProjectsPage: React.FC = () => {
     setEditName(p.name);
     setEditDescription(p.description || '');
     setEditClient(p.client);
-    setEditStartDate(p.startDate ? format(new Date(p.startDate), 'yyyy-MM-dd') : '');
-    setEditEndDate(p.endDate ? format(new Date(p.endDate), 'yyyy-MM-dd') : '');
+    const sStr = p.startDate ? format(new Date(p.startDate), 'yyyy-MM-dd') : '';
+    const eStr = p.endDate ? format(new Date(p.endDate), 'yyyy-MM-dd') : '';
+    setEditStartDate(sStr);
+    setEditEndDate(eStr);
+    setInitialStartDate(sStr);
+    setInitialEndDate(eStr);
 
     const tId =
       typeof p.teamId === 'string'
@@ -188,23 +204,47 @@ export const ProjectsPage: React.FC = () => {
       setEditError('Please fill in all required fields');
       return;
     }
+    if (editStartDate < todayString && editStartDate !== initialStartDate) {
+      setEditError('Start date cannot be in the past');
+      return;
+    }
+    if (editEndDate < todayString && editEndDate !== initialEndDate) {
+      setEditError('End date cannot be in the past');
+      return;
+    }
     if (new Date(editEndDate) < new Date(editStartDate)) {
       setEditError('End date must be greater than or equal to start date');
       return;
     }
 
+    const patchData: {
+      name: string;
+      description?: string;
+      client: string;
+      startDate?: string;
+      endDate?: string;
+      teamId?: string;
+      managerId: string | null;
+      status: ProjectStatus;
+    } = {
+      name: editName.trim(),
+      description: editDescription.trim() || undefined,
+      client: editClient.trim(),
+      teamId: editTeamId || undefined,
+      managerId: editManagerId ? editManagerId : null,
+      status: editStatus,
+    };
+
+    if (editStartDate !== initialStartDate || editStartDate >= todayString) {
+      patchData.startDate = new Date(editStartDate).toISOString();
+    }
+    if (editEndDate !== initialEndDate || editEndDate >= todayString) {
+      patchData.endDate = new Date(editEndDate).toISOString();
+    }
+
     updateMutation.mutate({
       projectId: projectToEdit._id,
-      data: {
-        name: editName.trim(),
-        description: editDescription.trim() || undefined,
-        client: editClient.trim(),
-        startDate: new Date(editStartDate).toISOString(),
-        endDate: new Date(editEndDate).toISOString(),
-        teamId: editTeamId || undefined,
-        managerId: editManagerId ? editManagerId : null,
-        status: editStatus,
-      },
+      data: patchData,
     });
   };
 
@@ -544,8 +584,20 @@ export const ProjectsPage: React.FC = () => {
                   <input
                     type="date"
                     required
+                    min={todayString}
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && val < todayString) {
+                        setError('Start date cannot be in the past');
+                      } else if (error === 'Start date cannot be in the past') {
+                        setError(null);
+                      }
+                      setStartDate(val);
+                      if (endDate && val && endDate < val) {
+                        setEndDate(val);
+                      }
+                    }}
                     className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
                   />
                 </div>
@@ -557,8 +609,22 @@ export const ProjectsPage: React.FC = () => {
                   <input
                     type="date"
                     required
+                    min={startDate && startDate >= todayString ? startDate : todayString}
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && val < todayString) {
+                        setError('End date cannot be in the past');
+                      } else if (startDate && val && val < startDate) {
+                        setError('End date must be greater than or equal to start date');
+                      } else if (
+                        error === 'End date cannot be in the past' ||
+                        error === 'End date must be greater than or equal to start date'
+                      ) {
+                        setError(null);
+                      }
+                      setEndDate(val);
+                    }}
                     className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
                   />
                 </div>
@@ -716,8 +782,20 @@ export const ProjectsPage: React.FC = () => {
                   <input
                     type="date"
                     required
+                    min={editStartDate && editStartDate < todayString ? editStartDate : todayString}
                     value={editStartDate}
-                    onChange={(e) => setEditStartDate(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && val < todayString && val !== initialStartDate) {
+                        setEditError('Start date cannot be in the past');
+                      } else if (editError === 'Start date cannot be in the past') {
+                        setEditError(null);
+                      }
+                      setEditStartDate(val);
+                      if (editEndDate && val && editEndDate < val) {
+                        setEditEndDate(val);
+                      }
+                    }}
                     className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
                   />
                 </div>
@@ -729,8 +807,28 @@ export const ProjectsPage: React.FC = () => {
                   <input
                     type="date"
                     required
+                    min={
+                      editStartDate && editStartDate >= todayString
+                        ? editStartDate
+                        : editEndDate && editEndDate < todayString
+                        ? editEndDate
+                        : todayString
+                    }
                     value={editEndDate}
-                    onChange={(e) => setEditEndDate(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && val < todayString && val !== initialEndDate) {
+                        setEditError('End date cannot be in the past');
+                      } else if (editStartDate && val && val < editStartDate) {
+                        setEditError('End date must be greater than or equal to start date');
+                      } else if (
+                        editError === 'End date cannot be in the past' ||
+                        editError === 'End date must be greater than or equal to start date'
+                      ) {
+                        setEditError(null);
+                      }
+                      setEditEndDate(val);
+                    }}
                     className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
                   />
                 </div>

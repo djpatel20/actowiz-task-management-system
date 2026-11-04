@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { projectsApi } from '../projects/projectsApi.js';
 import { teamsApi } from '../teams/teamsApi.js';
 import { TaskPriority, User } from '../../types/index.js';
@@ -88,12 +89,19 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     }
   }, [members, assigneeId]);
 
+  const todayString = format(new Date(), 'yyyy-MM-dd');
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !projectId || !assigneeId || !dueDate) {
       setError('Please fill in all required fields');
+      return;
+    }
+
+    if (dueDate < todayString) {
+      setError('Due date cannot be in the past');
       return;
     }
 
@@ -246,8 +254,17 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 <input
                   type="date"
                   required
+                  min={todayString}
                   value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val && val < todayString) {
+                      setError('Due date cannot be in the past');
+                    } else if (error === 'Due date cannot be in the past') {
+                      setError(null);
+                    }
+                    setDueDate(val);
+                  }}
                   className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
                 />
               </div>

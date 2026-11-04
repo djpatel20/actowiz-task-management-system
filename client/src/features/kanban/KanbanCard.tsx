@@ -57,7 +57,11 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
       {...listeners}
       {...attributes}
       style={style}
-      className={`group bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-acto-sm acto-card transition-all cursor-pointer hover:border-[#4400CE]/40 hover:shadow-acto-md select-none ${
+      className={`group bg-white rounded-xl p-3.5 shadow-acto-sm acto-card transition-all cursor-pointer hover:shadow-acto-md select-none ${
+        isOverdue
+          ? 'border-l-4 border-l-[#DC2626] border-t border-r border-b border-[#FCA5A5] bg-[#FFFBFB]'
+          : 'border border-[#E2E8F0] hover:border-[#4400CE]/40'
+      } ${
         isDragging ? 'opacity-40 shadow-acto-lg ring-2 ring-[#4400CE] cursor-grabbing' : ''
       }`}
       onClick={(e) => {
@@ -69,16 +73,24 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
       }}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="text-[10px] font-semibold tracking-wider uppercase text-[#5B616E] truncate max-w-[150px] font-heading">
+        <span className="text-[10px] font-semibold tracking-wider uppercase text-[#5B616E] truncate max-w-[130px] font-heading">
           {project?.name || 'No Project'}
         </span>
-        <span
-          className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 ${getPriorityBadge(
-            task.priority
-          )}`}
-        >
-          {task.priority}
-        </span>
+        <div className="flex items-center space-x-1.5 shrink-0">
+          {isOverdue && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase text-[#DC2626] bg-[#FEF2F2] border-[#FCA5A5] flex items-center space-x-1 shadow-2xs">
+              <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+              <span>Overdue</span>
+            </span>
+          )}
+          <span
+            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${getPriorityBadge(
+              task.priority
+            )}`}
+          >
+            {task.priority}
+          </span>
+        </div>
       </div>
 
       <h3 className="text-xs font-semibold text-[#1E1B26] leading-snug line-clamp-2 mb-3 font-sans group-hover:text-[#290660] transition-colors pointer-events-none">
