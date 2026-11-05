@@ -200,7 +200,9 @@ export class TaskService {
           })
         );
 
-      if (!isProjectManager && !hasTeamAccess && !isAssignee) {
+      const canAccess = isAssignee || (pManagerId ? isProjectManager : hasTeamAccess);
+
+      if (!canAccess) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {

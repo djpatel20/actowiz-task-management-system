@@ -84,16 +84,20 @@ export class DashboardService {
       const projects = await Project.find({
         $or: [
           { managerId: actor._id },
-          ...(teamIds.length > 0 ? [{ teamId: { $in: teamIds } }] : []),
+          ...(teamIds.length > 0
+            ? [
+                {
+                  teamId: { $in: teamIds },
+                  $or: [{ managerId: { $exists: false } }, { managerId: null }],
+                },
+              ]
+            : []),
         ],
       }).select('_id');
 
       managerProjectIds = projects.map((p) => p._id as Types.ObjectId);
 
-      filter.$or = [
-        { projectId: { $in: managerProjectIds } },
-        ...(teamIds.length > 0 ? [{ teamId: { $in: teamIds } }] : []),
-      ];
+      filter.projectId = { $in: managerProjectIds };
     }
     // Admin has global filter (empty filter)
 

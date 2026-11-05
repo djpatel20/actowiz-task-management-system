@@ -82,7 +82,14 @@ export class ProjectService {
 
       const managerConditions: Array<Record<string, unknown>> = [
         { managerId: actor._id },
-        { teamId: { $in: teamIds } },
+        ...(teamIds.length > 0
+          ? [
+              {
+                teamId: { $in: teamIds },
+                $or: [{ managerId: { $exists: false } }, { managerId: null }],
+              },
+            ]
+          : []),
       ];
 
       if (filter.$or) {
@@ -145,10 +152,10 @@ export class ProjectService {
     // Authorization check
     if (actor.role === USER_ROLES.MANAGER) {
       const pTeamId = (project.teamId as { _id?: Types.ObjectId } | null)?._id || project.teamId;
-      const isProjectManager =
-        project.managerId &&
-        ((project.managerId as { _id?: Types.ObjectId })._id || project.managerId).toString() ===
-          actor._id.toString();
+      const pManagerId = project.managerId
+        ? ((project.managerId as { _id?: Types.ObjectId })._id || project.managerId).toString()
+        : null;
+      const isProjectManager = Boolean(pManagerId && pManagerId === actor._id.toString());
 
       const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
       const isActorInTeam =
@@ -163,7 +170,9 @@ export class ProjectService {
           $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
         }));
 
-      if (!isProjectManager && !isTeamManager) {
+      const hasAccess = pManagerId ? isProjectManager : isTeamManager;
+
+      if (!hasAccess) {
         throw new NotFoundError('Project not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {
@@ -271,6 +280,9 @@ export class ProjectService {
     }
 
     if (actor.role === USER_ROLES.MANAGER) {
+      const pManagerId = project.managerId ? project.managerId.toString() : null;
+      const isProjectManager = Boolean(pManagerId && pManagerId === actor._id.toString());
+
       const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
       const isActorInTeam =
         (actor.teamId && project.teamId.toString() === actor.teamId.toString()) ||
@@ -282,7 +294,9 @@ export class ProjectService {
             $or: [{ managerId: actor._id }, { managerIds: actor._id }, { memberIds: actor._id }],
           })
         );
-      if (!isActorInTeam) {
+
+      const hasPermission = pManagerId ? isProjectManager : isActorInTeam;
+      if (!hasPermission) {
         throw new NotFoundError('Project not found');
       }
     }

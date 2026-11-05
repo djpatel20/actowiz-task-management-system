@@ -18,15 +18,16 @@ A production-grade, CRM-style task management web application built for **Actowi
 - [1. Tech Stack](#1-tech-stack)
 - [2. System Overview & RBAC Permissions](#2-system-overview--rbac-permissions)
 - [3. Seed Credentials for Each Role](#3-seed-credentials-for-each-role)
-- [4. Setup & Running Instructions](#4-setup--running-instructions)
+- [4. Reviewer Notes & Testing Guide](#4-reviewer-notes--testing-guide)
+- [5. Setup & Running Instructions](#5-setup--running-instructions)
   - [Prerequisites](#prerequisites)
   - [Option A: Docker Containerization (Recommended)](#option-a-docker-containerization-recommended)
   - [Option B: Local Node.js Development](#option-b-local-nodejs-development)
   - [Environment Variables](#environment-variables)
   - [Running the Automated Test Suite](#running-the-automated-test-suite)
-- [5. Assumptions & Architectural Decisions](#5-assumptions--architectural-decisions)
-- [6. Architecture & Documentation Links](#6-architecture--documentation-links)
-- [7. Production Deployment](#7-production-deployment)
+- [6. Assumptions & Architectural Decisions](#6-assumptions--architectural-decisions)
+- [7. Architecture & Documentation Links](#7-architecture--documentation-links)
+- [8. Production Deployment](#8-production-deployment)
 
 ---
 
@@ -116,7 +117,39 @@ The database comes pre-configured with realistic accounts across 2 business unit
 
 ---
 
-## 4. Setup & Running Instructions
+## 4. Reviewer Notes & Testing Guide
+
+> [!IMPORTANT]
+> **Key Guidance for Evaluators & Code Reviewers**
+> This section outlines critical testing tips, security design decisions, and architectural assumptions to ensure a smooth evaluation experience.
+
+### 1. Demo Credentials Disclaimer
+* **Demonstration & Testing Only**: The seeded credentials in Section 3 and the quick-fill login buttons in the UI are provided **strictly for testing, local evaluation, and automated CI test suites (`npm test`)**.
+* **Zero Production Intent**: No default or hardcoded credentials are ever intended for production environments. All passwords stored in the database are salted and hashed using `bcrypt` (work factor 12). Production deployments require unique credentials and rotated environment secrets.
+
+### 2. Browser Cookie Storage & Incognito Testing
+* **HttpOnly Cookie Architecture**: For enterprise-grade security against Cross-Site Scripting (XSS), JWT access and refresh tokens are stored exclusively in **`HttpOnly` and `SameSite` cookies** rather than vulnerable `localStorage`.
+* **Chrome Incognito Third-Party Cookie Flag**: Google Chrome Incognito mode enables *"Block third-party cookies"* by default. When running locally (`http://localhost:5173` talking to `http://localhost:5000`), Chrome's strict incognito heuristic may misclassify cross-port cookies as third-party and silently block them from being stored, causing instant 401 / `"Refresh token required"` errors.
+* **Recommended Reviewer Setup**:
+  * **Option A (Recommended)**: Use **Separate Chrome Profiles** (e.g., Profile 1 for Admin, Profile 2 for Manager, Profile 3 for Employee). Each profile maintains an isolated cookie jar without Incognito's aggressive cookie-blocking rules.
+  * **Option B**: Test different roles concurrently using multiple browsers (e.g., Chrome for Admin, Microsoft Edge for Manager, Firefox for Employee) to see real-time updates and notifications side-by-side.
+  * **Option C**: If testing in Incognito, click the **Eye / Shield icon** in the address bar and select **"Allow third-party cookies for this site"** (or disable protection for `localhost`).
+
+### 3. Role-Based Scoping & Project Ownership Rules
+* **Strict Server-Side Derivation**: User identity, role, and team scopes are derived strictly from the authenticated server-side session. Client-supplied IDs in request bodies are ignored.
+* **Project-Level Manager Assignment**: When an Admin assigns a project to a specific Manager, only that designated manager has project-level oversight, task creation, and transition approval rights for that project. If an Admin reassigns the project to another manager, the previous manager's visibility is immediately revoked—even if both managers belong to the same team.
+* **Terminal `DONE` State**: Employees can only move tasks `TODO -> IN_PROGRESS -> IN_REVIEW`. Marking tasks `DONE` is strictly restricted to Managers and Admins on the backend.
+* **Mandatory Rejection Reason**: Reverting a task `IN_REVIEW -> IN_PROGRESS` strictly requires a mandatory rejection reason (min. 5 chars) which is permanently recorded in the task's audit history and dispatched via WebSocket alerts to the assigned employee.
+
+### 4. Concurrency & Defensive Engineering Practices
+* **Optimistic Concurrency Control (OCC)**: Collaborative Kanban updates inspect document version keys (`__v`). Concurrent modifications return `409 Conflict`, prompting the UI to automatically roll back optimistic changes and fetch fresh state.
+* **Adaptive MongoDB Transactions**: The system inspects connection topology at runtime—executing multi-document transactions inside `session.startTransaction()` on Replica Sets (production/Atlas), while falling back gracefully to atomic document updates on single-node standalone MongoDB instances.
+* **Binary Magic-Bytes File Validation**: File uploads inspect binary header signatures via `file-type` rather than trusting client-sent MIME types or file extensions, defending against disguised executables.
+* **Spreadsheet Formula Injection Defense**: All exported CSV cells are sanitized against spreadsheet formula execution (`=`, `+`, `-`, `@`, `\t`, `\r`) to ensure safe opening in Excel and Google Sheets.
+
+---
+
+## 5. Setup & Running Instructions
 
 ### Prerequisites
 - **Node.js**: v18.0.0 or higher (v20+ recommended)
@@ -242,7 +275,7 @@ npm test
 
 ---
 
-## 5. Assumptions & Architectural Decisions
+## 6. Assumptions & Architectural Decisions
 
 During the implementation of this system, the following deliberate design decisions and domain assumptions were made:
 
@@ -284,7 +317,7 @@ During the implementation of this system, the following deliberate design decisi
 
 ---
 
-## 6. Architecture & Documentation Links
+## 7. Architecture & Documentation Links
 
 Complete engineering specifications are maintained in the [`docs/`](./docs/) directory:
 
@@ -297,7 +330,7 @@ Complete engineering specifications are maintained in the [`docs/`](./docs/) dir
 
 ---
 
-## 7. Production Deployment
+## 8. Production Deployment
 
 - **Frontend Production URL**: `https://actowiz-task-management-system.vercel.app`
 - **Backend API URL**: `https://actowiz-task-management-system.onrender.com/api`

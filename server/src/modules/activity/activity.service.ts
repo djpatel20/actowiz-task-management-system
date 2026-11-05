@@ -2,6 +2,7 @@ import { ClientSession, Types } from 'mongoose';
 import { Activity, IActivityDocument } from './activity.model.js';
 import { Task } from '../tasks/task.model.js';
 import { Team } from '../teams/team.model.js';
+import { Project } from '../projects/project.model.js';
 import { User } from '../users/user.model.js';
 import { AuthUserPayload } from '../../shared/types/index.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
@@ -45,13 +46,18 @@ export class ActivityService {
     }
 
     if (actor.role === USER_ROLES.MANAGER) {
+      const project = await Project.findById(task.projectId).select('managerId').lean();
+      const pManagerId = project?.managerId ? project.managerId.toString() : null;
+      const isProjectManager = Boolean(pManagerId && pManagerId === actor._id.toString());
+      const isAssignee = Boolean(task.assigneeId && task.assigneeId.toString() === actor._id.toString());
+
       const userDoc = await User.findById(actor._id).select('teamId teamIds').lean();
       const isActorInTeam =
         (actor.teamId && task.teamId.toString() === actor.teamId.toString()) ||
         (userDoc?.teamId && task.teamId.toString() === userDoc.teamId.toString()) ||
         (userDoc?.teamIds && userDoc.teamIds.some((t: Types.ObjectId) => t.toString() === task.teamId.toString()));
 
-      const hasAccess =
+      const hasTeamAccess =
         isActorInTeam ||
         Boolean(
           await Team.exists({
@@ -60,7 +66,9 @@ export class ActivityService {
           })
         );
 
-      if (!hasAccess) {
+      const canAccess = isAssignee || (pManagerId ? isProjectManager : hasTeamAccess);
+
+      if (!canAccess) {
         throw new NotFoundError('Task not found');
       }
     } else if (actor.role === USER_ROLES.EMPLOYEE) {

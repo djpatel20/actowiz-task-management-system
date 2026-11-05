@@ -195,6 +195,10 @@ export const LoginPage: React.FC = () => {
                 <div className="text-[11px] text-[#5B616E] truncate">elena@actowiz.com</div>
               </button>
             </div>
+
+            <div className="mt-4 p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] text-[11px] text-[#5B616E] leading-relaxed">
+              <span className="font-semibold text-[#1E1B26]">Reviewer Note:</span> Demo credentials are strictly for evaluation & testing. Because sessions use secure <code className="text-[#290660] font-mono">HttpOnly</code> cookies, ensure cookies are enabled (or allow third-party cookies if evaluating in an Incognito tab).
+            </div>
           </div>
         </div>
       </div>
