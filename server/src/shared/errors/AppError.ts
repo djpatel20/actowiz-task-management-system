@@ -22,7 +22,20 @@ export class BadRequestError extends AppError {
 
 export class ValidationError extends AppError {
   constructor(message = 'Validation failed', details?: unknown) {
-    super(message, 400, 'VALIDATION_ERROR', details);
+    let resolvedMessage = message;
+    if (
+      (message === 'Validation failed' || !message) &&
+      Array.isArray(details) &&
+      details.length > 0
+    ) {
+      const msgs = details
+        .map((d) => (typeof d === 'object' && d !== null && 'message' in d ? (d as { message: string }).message : ''))
+        .filter(Boolean);
+      if (msgs.length > 0) {
+        resolvedMessage = msgs.join('. ');
+      }
+    }
+    super(resolvedMessage, 400, 'VALIDATION_ERROR', details);
   }
 }
 

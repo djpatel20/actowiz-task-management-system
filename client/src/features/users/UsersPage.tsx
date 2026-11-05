@@ -5,6 +5,7 @@ import { teamsApi } from '../teams/teamsApi.js';
 import { User, UserRole } from '../../types/index.js';
 import { useAuth } from '../auth/AuthContext.js';
 import { Users, Plus, UserX, UserCheck, X, Shield, Edit3 } from 'lucide-react';
+import { getApiErrorMessage } from '../../lib/errors.js';
 
 export const UsersPage: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -53,10 +54,7 @@ export const UsersPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to create user';
-      setError(msg);
+      setError(getApiErrorMessage(err, 'Failed to create user'));
     },
   });
 
@@ -77,10 +75,7 @@ export const UsersPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to update user role';
-      setEditError(msg);
+      setEditError(getApiErrorMessage(err, 'Failed to update user role'));
     },
   });
 
@@ -95,10 +90,35 @@ export const UsersPage: React.FC = () => {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !password || ((role === 'MANAGER' || role === 'EMPLOYEE') && !teamId)) {
-      setError('Please fill in all required fields including team assignment');
+    if (!name.trim()) {
+      setError('Full name is required');
       return;
     }
+    if (name.trim().length < 2) {
+      setError('Full name must be at least 2 characters long');
+      return;
+    }
+    if (!email.trim()) {
+      setError('Email address is required');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    if (!password) {
+      setError('Initial password is required');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+    if ((role === 'MANAGER' || role === 'EMPLOYEE') && !teamId) {
+      setError('Team assignment is required for Managers and Employees');
+      return;
+    }
+    setError(null);
     createMutation.mutate({
       name: name.trim(),
       email: email.trim(),
@@ -158,7 +178,7 @@ export const UsersPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center space-x-1.5 px-3.5 py-2 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all"
+          className="flex items-center space-x-1.5 px-3.5 py-2 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4 text-[#FF6B00]" />
           <span className="font-heading">New User</span>
@@ -239,7 +259,7 @@ export const UsersPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => openEditModal(u)}
-                            className="inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 text-[#4400CE] hover:bg-[#4400CE]/10 rounded transition-colors"
+                            className="inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 text-[#4400CE] hover:bg-[#4400CE]/10 rounded transition-colors cursor-pointer"
                             title="Assign Role & Team"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -253,7 +273,7 @@ export const UsersPage: React.FC = () => {
                             onClick={() =>
                               statusMutation.mutate({ userId: id, isActive: !u.isActive })
                             }
-                            className={`text-xs font-semibold px-2.5 py-1 rounded transition-colors ${
+                            className={`text-xs font-semibold px-2.5 py-1 rounded transition-colors cursor-pointer ${
                               u.isActive
                                 ? 'text-[#DC2626] hover:bg-[#FEF2F2]'
                                 : 'text-[#059669] hover:bg-[#ECFDF5]'
@@ -286,7 +306,7 @@ export const UsersPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setUserToEdit(null)}
-                className="text-[#94A3B8] hover:text-[#1E1B26]"
+                className="text-[#94A3B8] hover:text-[#1E1B26] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -345,14 +365,14 @@ export const UsersPage: React.FC = () => {
                   type="button"
                   onClick={() => setUserToEdit(null)}
                   disabled={updateRoleMutation.isPending}
-                  className="px-3.5 py-2 text-xs font-semibold text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors"
+                  className="px-3.5 py-2 text-xs font-semibold text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={updateRoleMutation.isPending}
-                  className="px-4 py-2 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all disabled:opacity-50 font-heading"
+                  className="px-4 py-2 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all disabled:opacity-50 font-heading cursor-pointer"
                 >
                   {updateRoleMutation.isPending ? 'Saving...' : 'Update Role'}
                 </button>
@@ -376,7 +396,7 @@ export const UsersPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-[#94A3B8] hover:text-[#1E1B26]"
+                className="text-[#94A3B8] hover:text-[#1E1B26] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -396,6 +416,8 @@ export const UsersPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  minLength={2}
+                  maxLength={100}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Rachel Zane"
@@ -424,11 +446,16 @@ export const UsersPage: React.FC = () => {
                 <input
                   type="password"
                   required
+                  minLength={8}
+                  maxLength={128}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
+                  placeholder="Minimum 8 characters (e.g. Pass1234!)"
                   className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
                 />
+                <p className="text-[11px] text-[#5B616E] mt-1 font-sans">
+                  Must be at least 8 characters long.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -474,14 +501,14 @@ export const UsersPage: React.FC = () => {
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   disabled={createMutation.isPending}
-                  className="px-3.5 py-2 text-xs font-semibold text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors"
+                  className="px-3.5 py-2 text-xs font-semibold text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={createMutation.isPending}
-                  className="px-4 py-2 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all disabled:opacity-50 font-heading"
+                  className="px-4 py-2 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all disabled:opacity-50 font-heading cursor-pointer"
                 >
                   {createMutation.isPending ? 'Provisioning...' : 'Provision User'}
                 </button>

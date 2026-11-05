@@ -18,6 +18,7 @@ import {
   Send,
   Upload,
 } from 'lucide-react';
+import { getApiErrorMessage } from '../../lib/errors.js';
 
 const safeFormat = (date: unknown, formatStr: string, fallback = 'N/A'): string => {
   if (!date) return fallback;
@@ -57,10 +58,12 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'activity' | 'attachments'>('overview');
   const [newComment, setNewComment] = useState('');
+  const [commentError, setCommentError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isReassigning, setIsReassigning] = useState(false);
+  const [reassignError, setReassignError] = useState<string | null>(null);
 
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -100,8 +103,12 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
     mutationFn: (content: string) => tasksApi.addComment(taskId!, content),
     onSuccess: () => {
       setNewComment('');
+      setCommentError(null);
       queryClient.invalidateQueries({ queryKey: ['task-comments', taskId] });
       queryClient.invalidateQueries({ queryKey: ['task-activities', taskId] });
+    },
+    onError: (err: unknown) => {
+      setCommentError(getApiErrorMessage(err, 'Failed to add comment'));
     },
   });
 
@@ -113,10 +120,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
       queryClient.invalidateQueries({ queryKey: ['task-activities', taskId] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Upload failed';
-      setUploadError(msg);
+      setUploadError(getApiErrorMessage(err, 'Upload failed'));
     },
   });
 
@@ -138,10 +142,7 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to delete task';
-      setDeleteError(msg);
+      setDeleteError(getApiErrorMessage(err, 'Failed to delete task'));
     },
   });
 
@@ -150,9 +151,13 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
       tasksApi.updateTask(taskId!, { assigneeId: newAssigneeId }),
     onSuccess: () => {
       setIsReassigning(false);
+      setReassignError(null);
       queryClient.invalidateQueries({ queryKey: ['task', taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-activities', taskId] });
+    },
+    onError: (err: unknown) => {
+      setReassignError(getApiErrorMessage(err, 'Failed to reassign task'));
     },
   });
 
@@ -172,7 +177,11 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
 
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    if (!newComment.trim()) {
+      setCommentError('Comment cannot be empty');
+      return;
+    }
+    setCommentError(null);
     addCommentMutation.mutate(newComment.trim());
   };
 
@@ -358,6 +367,11 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                     </div>
                     {isReassigning ? (
                       <div className="mt-2 space-y-1.5">
+                        {reassignError && (
+                          <div className="p-2 rounded bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-[11px]">
+                            {reassignError}
+                          </div>
+                        )}
                         <select
                           defaultValue={assignee?._id || ''}
                           onChange={(e) => {
@@ -473,6 +487,11 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                   </div>
 
                   <form onSubmit={handleCommentSubmit} className="pt-1">
+                    {commentError && (
+                      <div className="mb-2 p-2 rounded bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-[11px]">
+                        {commentError}
+                      </div>
+                    )}
                     <div className="flex items-center space-x-2">
                       <input
                         type="text"
@@ -524,6 +543,11 @@ export const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({
                 </div>
 
                 <form onSubmit={handleCommentSubmit} className="pt-3 border-t border-[#E2E8F0]">
+                  {commentError && (
+                    <div className="mb-2 p-2 rounded bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-[11px]">
+                      {commentError}
+                    </div>
+                  )}
                   <div className="flex items-center space-x-2">
                     <input
                       type="text"

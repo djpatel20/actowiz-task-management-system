@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext.js';
 import actowizLogoWhite from '../../assets/actowiz-logo-white.svg';
 import actowizLogoColor from '../../assets/actowiz-logo.png';
 import { ShieldCheck, ArrowRight, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
+import { getApiErrorMessage } from '../../lib/errors.js';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -17,16 +18,23 @@ export const LoginPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!email.trim() || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       navigate('/');
     } catch (err: unknown) {
-      const errorMsg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Invalid credentials or connection failed.';
-      setError(errorMsg);
+      setError(getApiErrorMessage(err, 'Invalid credentials or connection failed.'));
     } finally {
       setIsSubmitting(false);
     }

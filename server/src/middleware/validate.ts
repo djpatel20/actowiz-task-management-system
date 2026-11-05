@@ -27,7 +27,11 @@ export const validateRequest = (schema: RequestValidationSchema) => {
           field: err.path.join('.'),
           message: err.message,
         }));
-        next(new ValidationError('Validation failed', details));
+        const summaryMessage =
+          details.length === 1
+            ? details[0].message
+            : details.map((d) => d.message).join('. ') || 'Validation failed';
+        next(new ValidationError(summaryMessage, details));
       } else {
         next(error);
       }

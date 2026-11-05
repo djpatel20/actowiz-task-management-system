@@ -3,14 +3,22 @@ import { TASK_PRIORITY, TASK_STATUS } from '../../config/constants.js';
 import { isPastDate } from '../../utils/dateValidator.js';
 
 export const createTaskSchema = z.object({
-  title: z.string().trim().min(3).max(200),
-  description: z.string().trim().max(5000).optional(),
-  projectId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Project ID'),
-  teamId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Team ID'),
-  assigneeId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Assignee ID'),
-  priority: z.nativeEnum(TASK_PRIORITY).default(TASK_PRIORITY.MEDIUM),
+  title: z
+    .string({ required_error: 'Task title is required' })
+    .trim()
+    .min(3, 'Task title must be at least 3 characters long')
+    .max(200, 'Task title cannot exceed 200 characters'),
+  description: z.string().trim().max(5000, 'Description cannot exceed 5000 characters').optional(),
+  projectId: z.string({ required_error: 'Project ID is required' }).regex(/^[0-9a-fA-F]{24}$/, 'Invalid Project ID'),
+  teamId: z.string({ required_error: 'Team ID is required' }).regex(/^[0-9a-fA-F]{24}$/, 'Invalid Team ID'),
+  assigneeId: z.string({ required_error: 'Assignee ID is required' }).regex(/^[0-9a-fA-F]{24}$/, 'Invalid Assignee ID'),
+  priority: z
+    .nativeEnum(TASK_PRIORITY, {
+      errorMap: () => ({ message: 'Invalid priority level' }),
+    })
+    .default(TASK_PRIORITY.MEDIUM),
   dueDate: z
-    .string()
+    .string({ required_error: 'Due date is required' })
     .datetime({ message: 'Due date must be a valid ISO 8601 datetime' })
     .refine((val) => !isPastDate(val), {
       message: 'Due date cannot be in the past',
@@ -18,9 +26,18 @@ export const createTaskSchema = z.object({
 });
 
 export const updateTaskSchema = z.object({
-  title: z.string().trim().min(3).max(200).optional(),
-  description: z.string().trim().max(5000).optional(),
-  priority: z.nativeEnum(TASK_PRIORITY).optional(),
+  title: z
+    .string()
+    .trim()
+    .min(3, 'Task title must be at least 3 characters long')
+    .max(200, 'Task title cannot exceed 200 characters')
+    .optional(),
+  description: z.string().trim().max(5000, 'Description cannot exceed 5000 characters').optional(),
+  priority: z
+    .nativeEnum(TASK_PRIORITY, {
+      errorMap: () => ({ message: 'Invalid priority level' }),
+    })
+    .optional(),
   dueDate: z
     .string()
     .datetime({ message: 'Due date must be a valid ISO 8601 datetime' })
@@ -33,8 +50,10 @@ export const updateTaskSchema = z.object({
 
 export const transitionStatusSchema = z
   .object({
-    status: z.nativeEnum(TASK_STATUS),
-    version: z.number().int().min(0, 'Version key (__v) is required for OCC'),
+    status: z.nativeEnum(TASK_STATUS, {
+      errorMap: () => ({ message: 'Invalid task status' }),
+    }),
+    version: z.number({ required_error: 'Version key (__v) is required for OCC' }).int().min(0, 'Version key (__v) is required for OCC'),
     rejectionReason: z.string().trim().optional(),
   })
   .refine(

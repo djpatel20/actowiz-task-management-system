@@ -17,6 +17,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { Team, User } from '../../types/index.js';
+import { getApiErrorMessage } from '../../lib/errors.js';
 
 export const TeamsPage: React.FC = () => {
   const { user } = useAuth();
@@ -91,10 +92,7 @@ export const TeamsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to create team';
-      setError(msg);
+      setError(getApiErrorMessage(err, 'Failed to create team'));
     },
   });
 
@@ -114,10 +112,7 @@ export const TeamsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to update team';
-      setEditError(msg);
+      setEditError(getApiErrorMessage(err, 'Failed to update team'));
     },
   });
 
@@ -132,10 +127,7 @@ export const TeamsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to delete team';
-      setDeleteError(msg);
+      setDeleteError(getApiErrorMessage(err, 'Failed to delete team'));
     },
   });
 
@@ -153,10 +145,7 @@ export const TeamsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to add member to team';
-      setMemberError(msg);
+      setMemberError(getApiErrorMessage(err, 'Failed to add member to team'));
     },
   });
 
@@ -173,16 +162,20 @@ export const TeamsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to remove member from team';
-      setMemberError(msg);
+      setMemberError(getApiErrorMessage(err, 'Failed to remove member from team'));
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      setError('Team name is required');
+      return;
+    }
+    if (name.trim().length < 2) {
+      setError('Team name must be at least 2 characters long');
+      return;
+    }
     createMutation.mutate({
       name: name.trim(),
       description: description.trim() || undefined,
@@ -199,7 +192,15 @@ export const TeamsPage: React.FC = () => {
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!teamToEdit || !editName.trim()) return;
+    if (!teamToEdit) return;
+    if (!editName.trim()) {
+      setEditError('Team name is required');
+      return;
+    }
+    if (editName.trim().length < 2) {
+      setEditError('Team name must be at least 2 characters long');
+      return;
+    }
     updateMutation.mutate({
       teamId: teamToEdit._id,
       data: {
@@ -576,11 +577,16 @@ export const TeamsPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  minLength={2}
+                  maxLength={100}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Team Gamma (Infrastructure)"
                   className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
                 />
+                <p className="text-[11px] text-[#5B616E] mt-1 font-sans">
+                  Must be at least 2 characters long.
+                </p>
               </div>
 
               <div>
@@ -654,11 +660,16 @@ export const TeamsPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  minLength={2}
+                  maxLength={100}
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="e.g. Team Gamma"
                   className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
                 />
+                <p className="text-[11px] text-[#5B616E] mt-1 font-sans">
+                  Must be at least 2 characters long.
+                </p>
               </div>
 
               <div>

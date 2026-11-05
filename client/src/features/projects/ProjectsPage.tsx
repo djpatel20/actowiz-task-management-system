@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext.js';
 import { FolderKanban, Plus, Calendar, Building2, X, Trash2, Edit3, AlertTriangle, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { Project, ProjectStatus } from '../../types/index.js';
+import { getApiErrorMessage } from '../../lib/errors.js';
 
 export const ProjectsPage: React.FC = () => {
   const { user } = useAuth();
@@ -69,10 +70,7 @@ export const ProjectsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to create project';
-      setError(msg);
+      setError(getApiErrorMessage(err, 'Failed to create project'));
     },
   });
 
@@ -101,10 +99,7 @@ export const ProjectsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to update project';
-      setEditError(msg);
+      setEditError(getApiErrorMessage(err, 'Failed to update project'));
     },
   });
 
@@ -118,10 +113,7 @@ export const ProjectsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to delete project';
-      setDeleteError(msg);
+      setDeleteError(getApiErrorMessage(err, 'Failed to delete project'));
     },
   });
 
@@ -138,8 +130,32 @@ export const ProjectsPage: React.FC = () => {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !client.trim() || !startDate || !endDate || !teamId) {
-      setError('Please fill in all required fields');
+    if (!name.trim()) {
+      setError('Project name is required');
+      return;
+    }
+    if (name.trim().length < 2) {
+      setError('Project name must be at least 2 characters long');
+      return;
+    }
+    if (!client.trim()) {
+      setError('Client name is required');
+      return;
+    }
+    if (client.trim().length < 2) {
+      setError('Client name must be at least 2 characters long');
+      return;
+    }
+    if (!startDate) {
+      setError('Start date is required');
+      return;
+    }
+    if (!endDate) {
+      setError('End date is required');
+      return;
+    }
+    if (!teamId) {
+      setError('Team assignment is required');
       return;
     }
     if (startDate < todayString) {
@@ -200,8 +216,28 @@ export const ProjectsPage: React.FC = () => {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectToEdit) return;
-    if (!editName.trim() || !editClient.trim() || !editStartDate || !editEndDate) {
-      setEditError('Please fill in all required fields');
+    if (!editName.trim()) {
+      setEditError('Project name is required');
+      return;
+    }
+    if (editName.trim().length < 2) {
+      setEditError('Project name must be at least 2 characters long');
+      return;
+    }
+    if (!editClient.trim()) {
+      setEditError('Client name is required');
+      return;
+    }
+    if (editClient.trim().length < 2) {
+      setEditError('Client name must be at least 2 characters long');
+      return;
+    }
+    if (!editStartDate) {
+      setEditError('Start date is required');
+      return;
+    }
+    if (!editEndDate) {
+      setEditError('End date is required');
       return;
     }
     if (editStartDate < todayString && editStartDate !== initialStartDate) {
@@ -474,6 +510,8 @@ export const ProjectsPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  minLength={2}
+                  maxLength={150}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Core Settlement Engine Migration"
@@ -488,6 +526,8 @@ export const ProjectsPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  minLength={2}
+                  maxLength={150}
                   value={client}
                   onChange={(e) => setClient(e.target.value)}
                   placeholder="e.g. Apex Financial"
@@ -686,6 +726,8 @@ export const ProjectsPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  minLength={2}
+                  maxLength={150}
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="e.g. Core Settlement Engine Migration"
@@ -700,6 +742,8 @@ export const ProjectsPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  minLength={2}
+                  maxLength={150}
                   value={editClient}
                   onChange={(e) => setEditClient(e.target.value)}
                   placeholder="e.g. Apex Financial"

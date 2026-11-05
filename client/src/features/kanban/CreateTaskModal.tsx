@@ -6,6 +6,7 @@ import { teamsApi } from '../teams/teamsApi.js';
 import { TaskPriority, User } from '../../types/index.js';
 import { useAuth } from '../auth/AuthContext.js';
 import { X, Plus, AlertCircle } from 'lucide-react';
+import { getApiErrorMessage } from '../../lib/errors.js';
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -95,11 +96,26 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !projectId || !assigneeId || !dueDate) {
-      setError('Please fill in all required fields');
+    if (!title.trim()) {
+      setError('Task title is required');
       return;
     }
-
+    if (title.trim().length < 3) {
+      setError('Task title must be at least 3 characters long');
+      return;
+    }
+    if (!projectId) {
+      setError('Please select a project');
+      return;
+    }
+    if (!assigneeId) {
+      setError('Please select an assignee');
+      return;
+    }
+    if (!dueDate) {
+      setError('Due date is required');
+      return;
+    }
     if (dueDate < todayString) {
       setError('Due date cannot be in the past');
       return;
@@ -120,10 +136,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       });
       onClose();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to create task';
-      setError(msg);
+      setError(getApiErrorMessage(err, 'Failed to create task'));
     } finally {
       setIsSubmitting(false);
     }
@@ -142,7 +155,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="text-[#94A3B8] hover:text-[#1E1B26] transition-colors"
+            className="text-[#94A3B8] hover:text-[#1E1B26] transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -163,11 +176,16 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             <input
               type="text"
               required
+              minLength={3}
+              maxLength={200}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Implement OAuth 2.0 PKCE flow"
               className="w-full px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#1E1B26] focus:outline-none focus:ring-2 focus:ring-[#290660]/20 focus:border-[#290660] transition-all"
             />
+            <p className="text-[11px] text-[#5B616E] mt-1 font-sans">
+              Must be at least 3 characters long.
+            </p>
           </div>
 
           <div>
@@ -276,14 +294,14 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-3.5 py-2 text-xs font-semibold text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors"
+              className="px-3.5 py-2 text-xs font-semibold text-[#5B616E] hover:text-[#1E1B26] hover:bg-[#F1F5F9] rounded-lg transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all disabled:opacity-50 font-heading"
+              className="px-4 py-2 bg-gradient-to-r from-[#4400CE] to-[#290660] hover:from-[#3B00B5] hover:to-[#1F044A] text-white text-xs font-semibold rounded-lg shadow-acto-purple active:scale-[0.98] transition-all disabled:opacity-50 font-heading cursor-pointer"
             >
               {isSubmitting ? 'Creating...' : 'Create Task'}
             </button>

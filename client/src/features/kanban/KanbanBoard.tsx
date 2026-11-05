@@ -23,6 +23,7 @@ import { TaskDetailsDrawer } from '../tasks/TaskDetailsDrawer.js';
 import { getSocket } from '../../lib/socket.js';
 import { AlertCircle, ChevronLeft, ChevronRight, Calendar, AlertTriangle } from 'lucide-react';
 import { format, isPast, isToday } from 'date-fns';
+import { getApiErrorMessage } from '../../lib/errors.js';
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
   { id: 'TODO', title: 'To Do' },
@@ -174,9 +175,7 @@ export const KanbanBoard: React.FC = () => {
       if (context?.previousTasks) {
         queryClient.setQueryData(['tasks', filters], context.previousTasks);
       }
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Transition failed. Reverting changes.';
+      const msg = getApiErrorMessage(err, 'Transition failed. Reverting changes.');
       setErrorMessage(msg);
     },
     onSettled: () => {
